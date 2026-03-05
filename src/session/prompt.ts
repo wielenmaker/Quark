@@ -72,17 +72,7 @@ export async function prompt(input: {
   active.set(sessionId, controller)
   bus.emit("loop-start", { sessionId })
   try {
-    // Generate a title in the background if session is untitled
-    const session = getSession(sessionId)
-    if (!session.title) {
-      resolveModel(input.model).then((model) => {
-        generateSessionTitle({ sessionId, message: text, model })
-      }).catch(() => {
-        // Title generation is best-effort — never fail the session
-      })
-    }
-
-    await loop(sessionId, controller.signal, agent, input.model)
+    await loop(sessionId, controller.signal, agent, input.model, text)
   } finally {
     active.delete(sessionId)
     bus.emit("loop-end", { sessionId })
