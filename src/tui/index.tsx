@@ -27,10 +27,14 @@ import { register, clear as clearRegistry } from "../tool/registry"
 import { buildSkillTool } from "../tool/skill"
 import { resetBootstrap } from "../bootstrap"
 import { info as notifyInfo } from "../notification/notification"
+import { initTreeSitter } from "./tree-sitter"
 
 // Detect terminal background BEFORE the TUI takes over stdin/stdout
 const termBg = await queryTerminalBackground()
 setTerminalBg(termBg)
+
+// Kick off tree-sitter worker initialization early (non-blocking)
+initTreeSitter()
 
 // ---------------------------------------------------------------------------
 // Parse --profile flag from CLI args
