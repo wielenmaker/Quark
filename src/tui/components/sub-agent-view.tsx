@@ -14,7 +14,7 @@
 //   └── ✓ WebSearch "AI techniques"
 
 import type { Component } from "solid-js"
-import { Show, For } from "solid-js"
+import { Show, For, Switch, Match } from "solid-js"
 import { colors, icons } from "../theme"
 import { RGBA } from "@opentui/core"
 import { InlineSpinner } from "./inline-spinner"
@@ -91,22 +91,22 @@ const ChildToolLine: Component<{ tool: SubAgentToolPart; isLast: boolean }> = (p
   return (
     <box flexDirection="row">
       <text fg={colors.muted}>{connector()} </text>
-      <Show when={isRunning()}>
-        <InlineSpinner />
-        <text> </text>
-      </Show>
-      <Show when={isPending()}>
-        <text fg={colors.muted}>… </text>
-      </Show>
-      <Show when={!isRunning() && !isPending()}>
-        <Show
-          when={!isError()}
-          fallback={<text fg={colors.error}>{icons.cross} </text>}
-        >
+      <Switch>
+        <Match when={isRunning()}>
+          <InlineSpinner />
+          <text> </text>
+        </Match>
+        <Match when={isPending()}>
+          <text fg={colors.muted}>… </text>
+        </Match>
+        <Match when={isError()}>
+          <text fg={colors.error}>{icons.cross} </text>
+        </Match>
+        <Match when={true}>
           <text fg={RGBA.fromHex("#98C379")}>{icons.checkmark} </text>
-        </Show>
-      </Show>
-      <text bold>{displayName}</text>
+        </Match>
+      </Switch>
+      <text>{displayName}</text>
       <Show when={label()}>
         <text> </text>
         <text fg={RGBA.fromHex("#365A61")} underline>{label()}</text>
@@ -140,14 +140,16 @@ export const SubAgentView: Component<SubAgentViewProps> = (props) => {
     <box flexDirection="column">
       {/* Header: spinner/check + profile name + token usage */}
       <box flexDirection="row">
-        <Show
-          when={!isDone()}
-          fallback={<text fg={RGBA.fromHex("#98C379")}>{icons.checkmark} </text>}
-        >
-          <InlineSpinner />
-          <text> </text>
-        </Show>
-        <text bold fg={colors.text}>{profileName()}</text>
+        <Switch>
+          <Match when={!isDone()}>
+            <InlineSpinner />
+            <text> </text>
+          </Match>
+          <Match when={true}>
+            <text fg={RGBA.fromHex("#98C379")}>{icons.checkmark} </text>
+          </Match>
+        </Switch>
+        <text fg={colors.text}>{profileName()}</text>
         <Show when={hasTokens()}>
           <text fg={colors.muted}>  {formatTokens(tokensUsed())} tokens{tokenPct()}</text>
         </Show>
