@@ -10,6 +10,7 @@
 //
 // Missing file or fields fall back to sensible defaults.
 
+import { createHash } from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import * as os from "os"
@@ -17,6 +18,25 @@ import { parse as parseYAML, stringify as stringifyYAML } from "yaml"
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "atom")
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.yaml")
+
+// ---------------------------------------------------------------------------
+// Session DB path — ~/.config/quark/session/<sha1-of-cwd>/quark.db
+// ---------------------------------------------------------------------------
+
+export const SESSION_DIR = path.join(os.homedir(), ".config", "quark", "session")
+
+/**
+ * Returns the DB file path for a given project directory.
+ * Path: ~/.config/quark/session/<sha1-of-cwd>/quark.db
+ * Creates the session directory if it doesn't exist.
+ */
+export function getDBPath(cwd?: string): string {
+  const dir = path.resolve(cwd ?? process.cwd())
+  const id = createHash("sha1").update(dir).digest("hex").slice(0, 12)
+  const sessionDir = path.join(SESSION_DIR, id)
+  fs.mkdirSync(sessionDir, { recursive: true })
+  return path.join(sessionDir, "quark.db")
+}
 
 // ---------------------------------------------------------------------------
 // Compact config — nested under AtomConfig

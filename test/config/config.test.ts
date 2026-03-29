@@ -28,6 +28,8 @@ const {
   getModelId,
   setConfigField,
   resetConfigCache,
+  getDBPath,
+  SESSION_DIR,
 } = await import("../../src/config/config")
 
 // ---------------------------------------------------------------------------
@@ -282,5 +284,38 @@ describe("resetConfigCache", () => {
     resetConfigCache()
 
     expect(loadConfig().main_model).toBe("v2")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getDBPath
+// ---------------------------------------------------------------------------
+describe("getDBPath", () => {
+  test("returns a path inside ~/.config/quark/session/", () => {
+    const p = getDBPath("/some/project")
+    expect(p).toContain(path.join(tmpHome, ".config", "quark", "session"))
+    expect(p.endsWith("/quark.db") || p.endsWith("\\quark.db")).toBe(true)
+  })
+
+  test("returns the same path for the same CWD", () => {
+    expect(getDBPath("/foo/bar")).toBe(getDBPath("/foo/bar"))
+  })
+
+  test("returns different paths for different CWDs", () => {
+    expect(getDBPath("/project/a")).not.toBe(getDBPath("/project/b"))
+  })
+
+  test("creates the session directory on disk", () => {
+    const p = getDBPath("/tmp/quark-test-project")
+    expect(fs.existsSync(path.dirname(p))).toBe(true)
+  })
+
+  test("uses process.cwd() when no argument given", () => {
+    const p = getDBPath()
+    expect(p).toContain(path.join(tmpHome, ".config", "quark", "session"))
+  })
+
+  test("SESSION_DIR points inside the mocked home", () => {
+    expect(SESSION_DIR).toContain(path.join(tmpHome, ".config", "quark", "session"))
   })
 })

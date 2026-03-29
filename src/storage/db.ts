@@ -5,6 +5,7 @@
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import * as schema from "../session/session.sql"
+import { getDBPath } from "../config/config"
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | undefined
 
@@ -81,7 +82,8 @@ function migratePartTypeConstraint(sqlite: Database) {
 
 export function getDB(dbPath?: string) {
   if (_db) return _db
-  const sqlite = new Database(dbPath ?? "atom.db", { create: true })
+  const resolvedPath = dbPath ?? getDBPath()
+  const sqlite = new Database(resolvedPath, { create: true })
   sqlite.run("PRAGMA journal_mode = WAL")
   sqlite.run("PRAGMA synchronous = NORMAL")
   sqlite.run("PRAGMA busy_timeout = 5000")
@@ -94,4 +96,11 @@ export function getDB(dbPath?: string) {
 
   _db = drizzle({ client: sqlite, schema })
   return _db
+}
+
+/**
+ * Reset the DB singleton — for test isolation.
+ */
+export function resetDB(): void {
+  _db = undefined
 }
