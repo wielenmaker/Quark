@@ -146,6 +146,7 @@ async function main() {
   await bootstrap({
     profileTools: profile.tools,
     boundSkills: profile.skills,
+    subAgent: args.subAgent,
   })
 
   // When running as a sub-agent, stream structured events to stderr

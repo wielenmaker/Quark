@@ -5,8 +5,14 @@
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import * as schema from "../session/session.sql"
+import * as os from "os"
+import * as path from "path"
+import * as fs from "fs"
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | undefined
+
+/** Persistent database path: ~/.config/quark/quark.db */
+const DEFAULT_DB_PATH = path.join(os.homedir(), ".config", "quark", "quark.db")
 
 const CREATE_TABLES = `
 CREATE TABLE IF NOT EXISTS session (
@@ -102,7 +108,12 @@ function migratePartTypeConstraintReasoning(sqlite: Database) {
 
 export function getDB(dbPath?: string) {
   if (_db) return _db
-  const sqlite = new Database(dbPath ?? "quark.db", { create: true })
+  const resolvedPath = dbPath ?? DEFAULT_DB_PATH
+  // Ensure the parent directory exists (no-op for :memory:)
+  if (resolvedPath !== ":memory:") {
+    fs.mkdirSync(path.dirname(resolvedPath), { recursive: true })
+  }
+  const sqlite = new Database(resolvedPath, { create: true })
   sqlite.run("PRAGMA journal_mode = WAL")
   sqlite.run("PRAGMA synchronous = NORMAL")
   sqlite.run("PRAGMA busy_timeout = 5000")

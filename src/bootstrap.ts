@@ -27,6 +27,8 @@ export interface BootstrapOptions {
   profileTools?: string[]
   /** Skill names bound to the active profile. Used to filter L1 skill metadata injected into the system prompt. */
   boundSkills?: string[]
+  /** When true, use an in-memory SQLite database to avoid WAL contention with the parent process. */
+  subAgent?: boolean
 }
 
 /**
@@ -57,7 +59,8 @@ export async function bootstrap(opts?: BootstrapOptions): Promise<void> {
   initialized = true
 
   // Initialize SQLite database (lazy — creates tables on first access)
-  getDB()
+  // Sub-agents use in-memory DB to avoid WAL write contention with the parent process.
+  getDB(opts?.subAgent ? ":memory:" : undefined)
 
   // Register built-in tools (always available)
   register(readTool)
