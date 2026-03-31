@@ -5,6 +5,28 @@
 - When working on this project, prioritize code quality and test coverage
 - Always run tests after making changes to core functionality
 
+### File System Operations
+- Never run `mv` or `rm` commands in parallel — always sequence them one at a time.
+  Parallel file operations cause I/O contention with SQLite's WAL writes and can
+  produce disk I/O errors that corrupt the session state.
+
+### Adding Scripts
+Before adding any new script to `scripts/`, place it in the correct subfolder:
+
+| Folder | Purpose | Examples |
+|---|---|---|
+| `scripts/auth/` | Login flows and token management | `copilot-login.ts` |
+| `scripts/debug/` | Inspection, introspection, diagnostics | `debug-keys.ts`, `count-tokens.ts` |
+| `scripts/proxy/` | Local proxy servers and their launchers | `claude-web-proxy.py`, `start-*.sh` |
+| `scripts/test/` | Manual end-to-end and integration tests | `e2e.ts`, `test-*.ts` |
+| `scripts/spikes/` | Throwaway experiments and proof-of-concepts | `scroll-spike.tsx` |
+
+Rules:
+- **Never drop scripts at the `scripts/` root.** Every script belongs in a subfolder.
+- If a script references `scripts/<old-path>`, update all callers (package.json, source files, other scripts, docs) to use the new path.
+- Proxy start scripts (`start-*.sh`) live alongside their proxy server file inside `scripts/proxy/`.
+- Spikes are temporary by nature — delete them once the experiment concludes.
+
 
 # Quark — Philosophy & Design
 

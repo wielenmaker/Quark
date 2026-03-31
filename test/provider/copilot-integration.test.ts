@@ -7,7 +7,7 @@
  *   COPILOT_TEST=1 COPILOT_TOKEN=<your-token> bun test test/provider/copilot-integration.test.ts
  *
  * How to get a token:
- *   1. Run: bun run scripts/copilot-login.ts
+ *   1. Run: bun run scripts/auth/copilot-login.ts
  *   2. Complete the OAuth flow in your browser
  *   3. Copy the printed token
  *

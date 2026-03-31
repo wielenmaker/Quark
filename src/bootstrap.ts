@@ -27,6 +27,12 @@ export interface BootstrapOptions {
   profileTools?: string[]
   /** Skill names bound to the active profile. Used to filter L1 skill metadata injected into the system prompt. */
   boundSkills?: string[]
+  /**
+   * When true, opens an in-memory SQLite database instead of the shared quark.db file.
+   * Used for sub-agents to avoid WAL write contention with the parent process.
+   * Sub-agent activity is streamed to the parent via stderr NDJSON events, so persistence is not needed.
+   */
+  subAgent?: boolean
 }
 
 /**
@@ -56,8 +62,9 @@ export async function bootstrap(opts?: BootstrapOptions): Promise<void> {
   if (initialized) return
   initialized = true
 
-  // Initialize SQLite database (lazy — creates tables on first access)
-  getDB()
+  // Initialize SQLite database (lazy — creates tables on first access).
+  // Sub-agents use an in-memory DB to avoid WAL write contention with the parent process.
+  getDB(opts?.subAgent ? ":memory:" : undefined)
 
   // Register built-in tools (always available)
   register(readTool)

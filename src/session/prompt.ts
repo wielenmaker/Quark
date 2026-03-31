@@ -88,9 +88,23 @@ export async function prompt(input: {
     getSession(input.sessionId) // throws if missing
     sessionId = input.sessionId
   } else {
+    // If parentSessionId is provided but doesn't exist in the DB (e.g. sub-agent
+    // with in-memory DB), skip it to avoid FOREIGN KEY constraint violation.
+    // Still tag the session as kind: "subagent" for metadata purposes.
+    let parentExists = false
+    if (input.parentSessionId) {
+      try {
+        getSession(input.parentSessionId)
+        parentExists = true
+      } catch {
+        // Parent doesn't exist in this DB (sub-agent in-memory DB)
+      }
+    }
     const sess = createSession(
       input.parentSessionId
-        ? { parentSessionId: input.parentSessionId, kind: "subagent" }
+        ? parentExists
+          ? { parentSessionId: input.parentSessionId, kind: "subagent" }
+          : { kind: "subagent" }
         : undefined,
     )
     sessionId = sess.id
@@ -347,7 +361,7 @@ export async function resolveModel(
       const token = loadToken()
       if (!token) {
         throw new Error(
-          "No Copilot token found. Run the login flow first (scripts/copilot-login.ts).",
+          "No Copilot token found. Run the login flow first (scripts/auth/copilot-login.ts).",
         )
       }
       return token
