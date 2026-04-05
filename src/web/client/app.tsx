@@ -53,14 +53,38 @@ export function App() {
 
   // WebSocket connection
   useEffect(() => {
-    let ws: WebSocket
+    let cancelled = false
+    let ws: WebSocket | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
     function connect() {
+      if (cancelled) return
+      // Ensure previous connection is fully closed before opening a new one
+      if (ws) {
+        ws.onopen = null
+        ws.onclose = null
+        ws.onerror = null
+        ws.onmessage = null
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close()
+        }
+      }
+
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       ws = new WebSocket(`${proto}://${location.host}/ws`)
       wsRef.current = ws
 
-      ws.onopen = () => { set({ connected: true }); reconnectDelay.current = 1000 }
-      ws.onclose = () => { set({ connected: false }); setTimeout(connect, reconnectDelay.current); reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000) }
+      ws.onopen = () => {
+        if (cancelled) return
+        set({ connected: true })
+        reconnectDelay.current = 1000
+      }
+      ws.onclose = () => {
+        if (cancelled) return
+        set({ connected: false })
+        reconnectTimer = setTimeout(connect, reconnectDelay.current)
+        reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
+      }
       ws.onerror = () => {}
       ws.onmessage = (e) => {
         try {
@@ -69,11 +93,21 @@ export function App() {
         } catch {}
       }
 
-      const ping = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' })) }, 30000)
+      const ping = setInterval(() => { if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'ping' })) }, 30000)
       ws.addEventListener('close', () => clearInterval(ping))
     }
     connect()
-    return () => { if (ws) ws.close() }
+    return () => {
+      cancelled = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (ws) {
+        ws.onopen = null
+        ws.onclose = null
+        ws.onerror = null
+        ws.onmessage = null
+        ws.close()
+      }
+    }
   }, [])
 
   // Event handler
@@ -229,6 +263,12 @@ export function App() {
   async function loadAppConfig() {
     try { const c = await api('GET', '/api/config'); set({ tokenLimit: c.contextWindow || 200000 }) } catch {}
   }
+
+  // Initial health check — set connected immediately if server responds
+  // (avoids red flash while WS handshake is in flight)
+  useEffect(() => {
+    api('GET', '/api/health').then(() => set({ connected: true })).catch(() => {})
+  }, [])
 
   useEffect(() => { refreshSessions(); loadModels(); loadAppConfig() }, [])
 
