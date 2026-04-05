@@ -118,7 +118,14 @@ export function App() {
         refreshSessions()
         break
       case 'user-message':
-        dispatch({ type: 'ADD_USER_MSG', id: d.messageId, text: d.text })
+        // Replace optimistic message with the real server message
+        if (pendingOptMsgRef.current) {
+          const optId = pendingOptMsgRef.current
+          pendingOptMsgRef.current = null
+          dispatch({ type: 'UPDATE_MSG', id: optId, updater: m => ({ ...m, id: d.messageId }) })
+        } else {
+          dispatch({ type: 'ADD_USER_MSG', id: d.messageId, text: d.text })
+        }
         break
       case 'assistant-message-start':
         dispatch({ type: 'ENSURE_ASSISTANT', id: d.messageId })
@@ -273,15 +280,24 @@ export function App() {
   useEffect(() => { refreshSessions(); loadModels(); loadAppConfig() }, [])
 
   // Actions
+  const pendingOptMsgRef = useRef<string | null>(null)
+
   async function sendMessage(text: string, images: { mime: string; data: string }[] = []) {
     if (!text.trim() && images.length === 0 || s.running) return
     const body: any = { text: text.trim() }
     if (s.sessionId) body.sessionId = s.sessionId
     if (images.length > 0) body.images = images.map(({ mime, data }) => ({ mime, data }))
+
+    // Optimistic: show user message immediately (before server round-trip)
+    const optimisticId = '_opt_' + Date.now()
+    pendingOptMsgRef.current = optimisticId
+    dispatch({ type: 'ADD_USER_MSG', id: optimisticId, text: text.trim(), images: images.length > 0 ? images : undefined })
+    set({ running: true })
+
     try {
       const r = await api('POST', '/api/prompt', body)
       if (r.sessionId) set({ sessionId: r.sessionId })
-    } catch { toast('Error', 'Failed to send', 'error') }
+    } catch { toast('Error', 'Failed to send', 'error'); set({ running: false }) }
   }
 
   async function cancelAgent() {
