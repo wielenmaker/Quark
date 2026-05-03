@@ -20,7 +20,7 @@ import type { ServerWebSocket } from "bun"
 
 const ALL_EVENTS: BusEventName[] = [
   "text-start", "text-delta", "text-end",
-  "tool-start", "tool-input", "tool-end",
+  "tool-start", "tool-input-delta", "tool-input", "tool-end",
   "step-start", "step-finish",
   "assistant-message-start", "assistant-message-end",
   "loop-start", "loop-end",

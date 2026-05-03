@@ -76,6 +76,7 @@ const PartView: Component<{ part: TuiPart; isStreaming: boolean }> = (props) => 
             error={asTool().error}
             diff={asTool().diff}
             streamingContent={asTool().streamingContent}
+            inputPreview={asTool().inputPreview}
           />
           {/* Nested sub-agent view with tree connector */}
           <box flexDirection="row">
@@ -107,6 +108,7 @@ const PartView: Component<{ part: TuiPart; isStreaming: boolean }> = (props) => 
             error={asTool().error}
             diff={asTool().diff}
             streamingContent={asTool().streamingContent}
+            inputPreview={asTool().inputPreview}
           />
         </box>
       </Match>

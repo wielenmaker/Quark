@@ -186,6 +186,10 @@ export function wireEvents(state: AppState) {
     const writeStreamTimers = new Map<string, ReturnType<typeof setInterval>>()
     const deferredToolEnd = new Map<string, BusEvents["tool-end"]>()
 
+    unsubs.push(on("tool-input-delta", (data) => {
+      dispatch(state, { type: "tool-input-delta", messageId: data.messageId, callId: data.callId, delta: data.delta })
+    }))
+
     unsubs.push(on("tool-input", (data) => {
       dispatch(state, { type: "tool-input", messageId: data.messageId, callId: data.callId, input: data.input })
 

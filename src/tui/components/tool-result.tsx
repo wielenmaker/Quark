@@ -24,6 +24,7 @@ interface ToolResultLineProps {
   error?: string
   diff?: string
   streamingContent?: string
+  inputPreview?: string
 }
 
 // Extract a short label from tool input (e.g., file path for read/write/edit)
@@ -114,6 +115,9 @@ export const ToolResultView: Component<ToolResultLineProps> = (props) => {
         <text bold flexShrink={0}>{displayName} </text>
         <Show when={label()}>
           <text fg={RGBA.fromHex("#365A61")} underline wrap="wrap" flexShrink={1}>{label()}</text>
+        </Show>
+        <Show when={isPending() && !label() && props.inputPreview}>
+          <text dimColor wrap="wrap" flexShrink={1}>{props.inputPreview!.slice(0, 200)}</text>
         </Show>
         <Show when={props.error}>
           <text> </text>

@@ -22,7 +22,7 @@ export interface TuiMessage {
 
 export type TuiPart =
   | { type: "text"; text: string; streaming?: boolean }
-  | { type: "tool"; tool: string; callId: string; status: "pending" | "awaiting_approval" | "running" | "completed" | "error"; input: Record<string, unknown>; output?: string; error?: string; diff?: string; streamingContent?: string; subAgent?: SubAgentState }
+  | { type: "tool"; tool: string; callId: string; status: "pending" | "awaiting_approval" | "running" | "completed" | "error"; input: Record<string, unknown>; inputPreview?: string; output?: string; error?: string; diff?: string; streamingContent?: string; subAgent?: SubAgentState }
   | { type: "thinking"; done: boolean; text: string }
   | { type: "image"; mime: string; data: string; label: string }
 
@@ -93,6 +93,7 @@ export type TuiAction =
   | { type: "text-delta"; messageId: string; delta: string; text: string }
   | { type: "text-end"; messageId: string; text: string }
   | { type: "tool-start"; messageId: string; tool: string; callId: string }
+  | { type: "tool-input-delta"; messageId: string; callId: string; delta: string }
   | { type: "tool-input"; messageId: string; callId: string; input: Record<string, unknown> }
   | { type: "tool-end"; messageId: string; callId: string; status: "completed" | "error"; output?: string; error?: string; diff?: string }
   | { type: "tool-running"; messageId: string; callId: string }
@@ -373,6 +374,21 @@ export function dispatch(state: AppState, action: TuiAction): void {
         }),
       )
       break
+
+    case "tool-input-delta": {
+      const tdMsgIdx = state.store.messages.findIndex((m) => m.id === action.messageId)
+      if (tdMsgIdx === -1) break
+      const tdPartIdx = state.store.messages[tdMsgIdx]!.parts.findIndex(
+        (p) => p.type === "tool" && (p as Extract<TuiPart, { type: "tool" }>).callId === action.callId,
+      )
+      if (tdPartIdx === -1) break
+      setStore("messages", tdMsgIdx, "parts", tdPartIdx, produce((part: TuiPart) => {
+        if (part.type === "tool") {
+          part.inputPreview = action.delta
+        }
+      }))
+      break
+    }
 
     case "tool-input": {
       // Find the part by index so we can use explicit setStore paths

@@ -109,6 +109,23 @@ describe("wireEvents: tool lifecycle", () => {
     expect(part.status).toBe("running")
   })
 
+  test("tool-input-delta streams inputPreview from bus event", () => {
+    const s = setup("s1")
+    bus.emit("assistant-message-start", { sessionId: "s1", messageId: "m1" })
+    bus.emit("tool-start", { sessionId: "s1", messageId: "m1", partId: "p1", tool: "read", callId: "c1" })
+
+    // Emit a delta
+    bus.emit("tool-input-delta", { sessionId: "s1", messageId: "m1", partId: "p1", callId: "c1", delta: '{"path":"/a.ts"}' })
+
+    const part = s.store.messages[0]!.parts[0] as any
+    expect(part.inputPreview).toBe('{"path":"/a.ts"}')
+    expect(part.status).toBe("pending") // still pending, awaiting tool-input
+
+    // Emit another delta — accumulates
+    bus.emit("tool-input-delta", { sessionId: "s1", messageId: "m1", partId: "p1", callId: "c1", delta: '{"path":"/a.ts","limit":10}' })
+    expect(part.inputPreview).toBe('{"path":"/a.ts","limit":10}')
+  })
+
   test("tool-end completes tool", () => {
     const s = setup("s1")
     bus.emit("assistant-message-start", { sessionId: "s1", messageId: "m1" })

@@ -324,6 +324,33 @@ describe("dispatch: tool lifecycle", () => {
     })
   })
 
+  test("tool-input-delta streams inputPreview on pending tool", () => {
+    withRoot(() => {
+      const s = createAppState({ sessionId: "s1", modelName: "smart", skillCount: 0 })
+      dispatch(s, { type: "add-assistant-message", id: "m1" })
+      dispatch(s, { type: "tool-start", messageId: "m1", tool: "read", callId: "c1" })
+
+      // First delta
+      dispatch(s, { type: "tool-input-delta", messageId: "m1", callId: "c1", delta: '{"path":' })
+      const part1 = s.store.messages[0]!.parts[0]! as Extract<TuiPart, { type: "tool" }>
+      expect(part1.status).toBe("pending")
+      expect(part1.inputPreview).toBe('{"path":')
+
+      // Second delta — accumulates
+      dispatch(s, { type: "tool-input-delta", messageId: "m1", callId: "c1", delta: '{"path":"/foo.ts"}' })
+      const part2 = s.store.messages[0]!.parts[0]! as Extract<TuiPart, { type: "tool" }>
+      expect(part2.inputPreview).toBe('{"path":"/foo.ts"}')
+
+      // tool-input replaces inputPreview with full parsed input
+      dispatch(s, { type: "tool-input", messageId: "m1", callId: "c1", input: { path: "/foo.ts" } })
+      const part3 = s.store.messages[0]!.parts[0]! as Extract<TuiPart, { type: "tool" }>
+      expect(part3.status).toBe("awaiting_approval")
+      expect(part3.input).toEqual({ path: "/foo.ts" })
+      // inputPreview is preserved (not cleared)
+      expect(part3.inputPreview).toBe('{"path":"/foo.ts"}')
+    })
+  })
+
   test("tool-end completes tool with output", () => {
     withRoot(() => {
       const s = createAppState({ sessionId: "s1", modelName: "smart", skillCount: 0 })

@@ -291,6 +291,9 @@ export function App() {
         dispatch({ type: 'ENSURE_ASSISTANT', id: d.messageId })
         dispatch({ type: 'UPDATE_MSG', id: d.messageId, updater: m => ({ ...m, parts: [...m.parts, { type: 'tool' as const, tool: d.tool, callId: d.callId, status: 'running' as const, input: null, output: null, error: null }] }) })
         break
+      case 'tool-input-delta':
+        dispatch({ type: 'UPDATE_MSG', id: d.messageId, updater: m => ({ ...m, parts: m.parts.map(p => p.type === 'tool' && p.callId === d.callId ? { ...p, inputPreview: d.delta } : p) }) })
+        break
       case 'tool-input':
         dispatch({ type: 'UPDATE_MSG', id: d.messageId, updater: m => ({ ...m, parts: m.parts.map(p => p.type === 'tool' && p.callId === d.callId ? { ...p, input: d.input } : p) }) })
         // Eagerly initialize subAgent when bash command is a sub-agent invocation

@@ -54,7 +54,7 @@ export interface ProcessInput {
 
 export async function processStream(input: ProcessInput): Promise<"stop" | "continue" | "compact"> {
   // Track tool parts by callId so we can update them as events arrive
-  const toolParts = new Map<string, { partId: string; data: ToolPartData }>()
+  const toolParts = new Map<string, { partId: string; data: ToolPartData; rawInput?: string }>()
   let currentText: { partId: string; data: TextPartData } | undefined
   let currentReasoning: { partId: string; data: ReasoningPartData } | undefined
   let lastFinish: string | undefined
@@ -156,9 +156,20 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
             break
           }
 
-          case "tool-input-delta":
-            // Streaming input text — we wait for tool-call for final args
+          case "tool-input-delta": {
+            const match = toolParts.get(event.id)
+            if (match) {
+              match.rawInput = (match.rawInput ?? "") + event.delta
+              bus.emit("tool-input-delta", {
+                sessionId: sid,
+                messageId: mid,
+                partId: match.partId,
+                callId: event.id,
+                delta: match.rawInput,
+              })
+            }
             break
+          }
 
           case "tool-input-end":
             break

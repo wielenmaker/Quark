@@ -30,6 +30,7 @@ export interface BusEvents {
 
   // Tool lifecycle
   "tool-start": { sessionId: string; messageId: string; partId: string; tool: string; callId: string }
+  "tool-input-delta": { sessionId: string; messageId: string; partId: string; callId: string; delta: string }
   "tool-input": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; input: Record<string, unknown> }
   "tool-running": { sessionId: string; messageId: string; callId: string }
   "tool-end": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; status: "completed" | "error"; output?: string; error?: string; diff?: string }
