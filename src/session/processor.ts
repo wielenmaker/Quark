@@ -29,6 +29,11 @@ import { bus } from "./events"
 import { fireHook } from "../plugin/registry"
 import { loadConfig } from "../config/config"
 import { getModelLimit } from "../provider/models"
+import { appendFileSync } from "fs"
+
+const debugLog = (msg: string) => {
+  try { appendFileSync("/tmp/quark-processor-debug.log", `${new Date().toISOString()} ${msg}\n`) } catch {}
+}
 
 export interface ProcessInput {
   model: LanguageModel
@@ -64,6 +69,8 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
 
   const sid = input.sessionId
   const mid = input.msg.id
+
+  debugLog(`processStream: start sessionId=${sid} messageId=${mid} toolNames=${Object.keys(input.tools).join(",")}`) 
 
   while (true) {
     try {
@@ -132,6 +139,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
           }
 
           case "tool-input-start": {
+            debugLog(`tool-input-start: tool=${event.toolName} id=${event.id}`)
             // Create a pending tool part
             const data: ToolPartData = {
               tool: event.toolName,
@@ -164,6 +172,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
             break
 
           case "tool-call": {
+            debugLog(`tool-call: tool=${event.toolName} toolCallId=${event.toolCallId} match=${toolParts.has(event.toolCallId)}`)
             const match = toolParts.get(event.toolCallId)
             if (match) {
               match.data.status = "awaiting_approval"
@@ -183,6 +192,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
           }
 
           case "tool-result": {
+            debugLog(`tool-result: toolCallId=${event.toolCallId} match=${toolParts.has(event.toolCallId)} outputType=${typeof event.output}`)
             const match = toolParts.get(event.toolCallId)
             if (match) {
               match.data.status = "completed"
@@ -214,6 +224,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
           }
 
           case "tool-error": {
+            debugLog(`tool-error: toolCallId=${event.toolCallId} match=${toolParts.has(event.toolCallId)} error=${String(event.error)}`)
             const match = toolParts.get(event.toolCallId)
             if (match) {
               match.data.status = "error"
@@ -246,6 +257,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
           }
 
           case "finish-step": {
+            debugLog(`finish-step: reason=${event.finishReason} inputTokens=${event.usage?.inputTokens} outputTokens=${event.usage?.outputTokens}`)
             lastFinish = event.finishReason
             const usage = event.usage
             const stepData: StepFinishData = {
