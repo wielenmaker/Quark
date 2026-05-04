@@ -10,6 +10,11 @@
 import { bus } from "./events"
 import { getModelLimit } from "../provider/models"
 import { loadConfig } from "../config/config"
+import { appendFileSync } from "fs"
+
+function debugLog(msg: string) {
+  try { appendFileSync("/tmp/quark-event-writer.log", `${new Date().toISOString()} ${msg}\n`) } catch {}
+}
 
 // Compact event shapes — keep wire size small
 export type SubAgentEvent =
@@ -36,6 +41,7 @@ function emit(event: SubAgentEvent): void {
  * Returns a cleanup function to unsubscribe.
  */
 export function startEventWriter(): () => void {
+  debugLog(`[event-writer] starting — subscribing to bus events`)
   const unsubs: (() => void)[] = []
 
   function on<K extends keyof import("./events").BusEvents>(
@@ -47,14 +53,17 @@ export function startEventWriter(): () => void {
   }
 
   on("tool-start", (data) => {
+    debugLog(`[event-writer] tool-start: ${data.tool} id=${data.callId}`)
     emit({ e: "tool-start", t: data.tool, id: data.callId })
   })
 
   on("tool-input", (data) => {
+    debugLog(`[event-writer] tool-input: ${data.tool} id=${data.callId}`)
     emit({ e: "tool-input", t: data.tool, id: data.callId, in: data.input })
   })
 
   on("tool-end", (data) => {
+    debugLog(`[event-writer] tool-end: ${data.tool} id=${data.callId} status=${data.status} hasOutput=${!!data.output}`)
     emit({
       e: "tool-end",
       t: data.tool,
@@ -65,6 +74,7 @@ export function startEventWriter(): () => void {
   })
 
   on("step-finish", (data) => {
+    debugLog(`[event-writer] step-finish reason=${data.data.reason}`)
     // Include the model's token limit so the parent can show context window %
     const modelSpec = loadConfig().main_model
     const limit = getModelLimit(modelSpec)
@@ -85,6 +95,7 @@ export function startEventWriter(): () => void {
   }
 
   on("text-delta", (data) => {
+    debugLog(`[event-writer] text-delta len=${data.text.length}`)
     pendingText = data.text // send full accumulated text, not just delta
     if (!textTimer) {
       textTimer = setTimeout(flushText, 200)
@@ -92,6 +103,7 @@ export function startEventWriter(): () => void {
   })
 
   on("text-end", () => {
+    debugLog(`[event-writer] text-end (flushing)`)
     // Flush any pending text immediately on end
     if (textTimer) {
       clearTimeout(textTimer)
@@ -101,6 +113,7 @@ export function startEventWriter(): () => void {
   })
 
   on("loop-end", () => {
+    debugLog(`[event-writer] loop-end`)
     // Final flush
     flushText()
     emit({ e: "loop-end" })

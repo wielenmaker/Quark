@@ -190,8 +190,10 @@ async function main() {
   bus.on("tool-end", (data) => {
     if (data.output) {
       const output = typeof data.output === "string" ? data.output : JSON.stringify(data.output)
-      // Truncate long outputs
-      const maxLen = 500
+      // Truncate long outputs for human-readable CLI display.
+      // Sub-agent mode: the parent model needs full tool results, so
+      // use the same 50 KB limit as the Bash tool's output buffer.
+      const maxLen = args.subAgent ? 50_000 : 500
       const display = output.length > maxLen ? output.slice(0, maxLen) + "..." : output
       process.stdout.write(`${display}\n`)
     }
