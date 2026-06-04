@@ -18,3 +18,8 @@ A [link to example](https://example.com).
 const x: number = 42
 console.log(`hello ${x}`)
 ```
+
+| Name | Age | City |
+|------|-----|------|
+| Alice | 30 | NYC |
+| Bob | 25 | LA |
