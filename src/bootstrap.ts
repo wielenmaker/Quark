@@ -5,28 +5,27 @@
 //
 // Call this once at startup before using the agent loop.
 
-import { register } from "./tool/registry"
-import { readTool } from "./tool/read"
-import { lookTool } from "./tool/look"
-import { questionTool } from "./tool/question"
-import { findSessionTool } from "./tool/find_session"
-import { readSessionTool } from "./tool/read_session"
-import { buildSkillTool } from "./tool/skill"
-import { ensureStorageRoot } from "./storage/session-jsonl"
-import { loadProfileTools } from "./tool/loader"
-import { loadPlugins } from "./plugin/loader"
-import { loadConfig } from "./config/config"
+import { register } from "./tool/registry";
+import { readTool } from "./tool/read";
+import { lookTool } from "./tool/look";
+import { questionTool } from "./tool/question";
+import { findSessionTool } from "./tool/find_session";
+import { buildSkillTool } from "./tool/skill";
+import { ensureStorageRoot } from "./storage/session-jsonl";
+import { loadProfileTools } from "./tool/loader";
+import { loadPlugins } from "./plugin/loader";
+import { loadConfig } from "./config/config";
 
-let initialized = false
+let initialized = false;
 
 /**
  * Options for {@link bootstrap}.
  */
 export interface BootstrapOptions {
   /** Tool IDs declared in the active profile's `tools[]` array. Only these tools are loaded from `~/.config/quark/tools/`. */
-  profileTools?: string[]
+  profileTools?: string[];
   /** Skill names bound to the active profile. Used to filter L1 skill metadata injected into the system prompt. */
-  boundSkills?: string[]
+  boundSkills?: string[];
 }
 
 /**
@@ -52,28 +51,27 @@ export interface BootstrapOptions {
  * ```
  */
 export async function bootstrap(opts?: BootstrapOptions): Promise<void> {
-  if (initialized) return
-  initialized = true
+  if (initialized) return;
+  initialized = true;
 
   // Ensure session storage directory exists
-  ensureStorageRoot()
+  ensureStorageRoot();
 
   // Register built-in tools (always available)
-  register(readTool)
-  register(lookTool)
-  register(findSessionTool)
-  register(readSessionTool)
-  register(questionTool)
-  register(buildSkillTool(opts?.boundSkills))
+  register(readTool);
+  register(lookTool);
+  register(findSessionTool);
+  register(questionTool);
+  register(buildSkillTool(opts?.boundSkills));
 
   // Load profile-declared tools from ~/.config/quark/tools/
   // Missing or invalid tools are shown as notifications (non-blocking)
   if (opts?.profileTools && opts.profileTools.length > 0) {
-    await loadProfileTools(opts.profileTools)
+    await loadProfileTools(opts.profileTools);
   }
 
   // Load plugins from ~/.config/quark/plugins/*.ts (non-blocking, errors notified)
-  await loadPlugins()
+  await loadPlugins();
 }
 
 /**
@@ -81,5 +79,5 @@ export async function bootstrap(opts?: BootstrapOptions): Promise<void> {
  * @internal Use in tests only — allows re-running bootstrap in a fresh state.
  */
 export function resetBootstrap(): void {
-  initialized = false
+  initialized = false;
 }

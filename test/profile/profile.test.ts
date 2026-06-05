@@ -1072,6 +1072,7 @@ describe("validateSubAgents", () => {
 describe("resolveProfile: sub_agents validation", () => {
   let atomDir: string
   let atomConfigPath: string
+  let previousConfig: string | null
 
   beforeEach(() => {
     resetProfileCache()
@@ -1080,13 +1081,23 @@ describe("resolveProfile: sub_agents validation", () => {
     // Write a temp .quark/config.yaml in the project root so resolveProfile picks it up
     atomDir = path.resolve(process.cwd(), ".quark")
     atomConfigPath = path.join(atomDir, "config.yaml")
+    previousConfig = fs.existsSync(atomConfigPath)
+      ? fs.readFileSync(atomConfigPath, "utf-8")
+      : null
     fs.mkdirSync(atomDir, { recursive: true })
   })
 
   afterEach(() => {
     resetProfileCache()
-    // Remove the temp .quark dir we created
-    fs.rmSync(atomDir, { recursive: true, force: true })
+    // Restore only the config file this test owns; keep other .quark data intact.
+    if (previousConfig === null) {
+      fs.rmSync(atomConfigPath, { force: true })
+      try {
+        fs.rmdirSync(atomDir)
+      } catch {}
+    } else {
+      fs.writeFileSync(atomConfigPath, previousConfig, "utf-8")
+    }
     // Dismiss all notifications left over
     for (const n of getActive()) dismiss(n.id)
   })

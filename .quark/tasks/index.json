@@ -270,5 +270,597 @@
     "profile": "coder",
     "timeCreated": 1779977370021,
     "timeUpdated": 1779977379291
+  },
+  {
+    "id": "task_dx6vBadjbWO7qcDg",
+    "title": "AI Tool Design Review",
+    "description": "AI Tool Design Review",
+    "profile": "coder",
+    "timeCreated": 1780115686406,
+    "timeUpdated": 1780203074462
+  },
+  {
+    "id": "task_yJsUoTmMp0vZI5WE",
+    "title": "Event Sourcing Storage Detail",
+    "description": "Event Sourcing Storage Detail",
+    "profile": "coder",
+    "timeCreated": 1780204230451,
+    "timeUpdated": 1780206322965
+  },
+  {
+    "id": "task_9FqYn7UFAeXiEO9j",
+    "title": "Deeply understand the project requirements for 'quark' and draft a comprehensive architecture document.",
+    "description": "Deeply understand the project requirements for 'quark' and draft a comprehensive architecture document.",
+    "profile": "coder",
+    "timeCreated": 1780288522736,
+    "timeUpdated": 1780288539584
+  },
+  {
+    "id": "task_9Y3z4VS53phcvECW",
+    "title": "Send the finder to search the OpenClaw GitHub repository",
+    "description": "Send the finder to search the OpenClaw GitHub repository",
+    "profile": "coder",
+    "timeCreated": 1780404166177,
+    "timeUpdated": 1780404254583
+  },
+  {
+    "id": "task_VP3hL70orsEY4pTV",
+    "title": "Implement a --chatbot mode for quark that bypasses tools, skills, and intermediaries to send input directly to the AI SDK like a normal chatbot.",
+    "description": "Implement a --chatbot mode for quark that bypasses tools, skills, and intermediaries to send input directly to the AI SDK like a normal chatbot.",
+    "profile": "coder",
+    "timeCreated": 1780481302651,
+    "timeUpdated": 1780481363360
+  },
+  {
+    "id": "task_sc2xaG3e1RY6zDYo",
+    "title": "Explain the potential outcome of an April match if it were to occur in June 2026, while noting the current month's discrepancy.",
+    "description": "Explain the potential outcome of an April match if it were to occur in June 2026, while noting the current month's discrepancy.",
+    "profile": "general",
+    "timeCreated": 1780516476587,
+    "timeUpdated": 1780516620166
+  },
+  {
+    "id": "task_Piv7KBTqPRYTWcK4",
+    "title": "Implement web fetch functionality to execute external URLs and retrieve data as provided by the user.",
+    "description": "Implement web fetch functionality to execute external URLs and retrieve data as provided by the user.",
+    "profile": "general",
+    "timeCreated": 1780516649197,
+    "timeUpdated": 1780516695518
+  },
+  {
+    "id": "task_jLwgY60EslbKpNvO",
+    "title": "Identify the next occurrence of the string 'neterlands' within the provided text",
+    "description": "Identify the next occurrence of the string 'neterlands' within the provided text",
+    "profile": "general",
+    "timeCreated": 1780550580857,
+    "timeUpdated": 1780550623424
+  },
+  {
+    "id": "task_DLWqRbiKTfloIaHn",
+    "title": "Determine the next fixture for the Dutch national men's football team in the World Cup 2026.",
+    "description": "Determine the next fixture for the Dutch national men's football team in the World Cup 2026.",
+    "profile": "general",
+    "timeCreated": 1780550770724,
+    "timeUpdated": 1780550776607
+  },
+  {
+    "id": "task_NQZW0TFbluoIVHuY",
+    "title": "Identify the next match involving Netherlands in the World Cup schedule for 2026.",
+    "description": "Identify the next match involving Netherlands in the World Cup schedule for 2026.",
+    "profile": "general",
+    "timeCreated": 1780550819250,
+    "timeUpdated": 1780550825159
+  },
+  {
+    "id": "task_meNfi5xfMWHZIU6M",
+    "title": "Provide the next football match scheduled for or held in The Netherlands.",
+    "description": "Provide the next football match scheduled for or held in The Netherlands.",
+    "profile": "general",
+    "timeCreated": 1780550928897,
+    "timeUpdated": 1780550934682
+  },
+  {
+    "id": "task_iOe36e6ENE8iXDYB",
+    "title": "Pong Response",
+    "description": "Pong Response",
+    "profile": "coder",
+    "timeCreated": 1780561621120,
+    "timeUpdated": 1780561631605
+  },
+  {
+    "id": "task_AWExrlJI9JPXNQ6U",
+    "title": "Create an index and group items by their folder location.",
+    "description": "Create an index and group items by their folder location.",
+    "profile": "coder",
+    "timeCreated": 1780574846111,
+    "timeUpdated": 1780575060406
+  },
+  {
+    "id": "task_mshuTg9dJkuJzfQW",
+    "title": "Commit Approval",
+    "description": "Commit Approval",
+    "profile": "coder",
+    "timeCreated": 1780581808910,
+    "timeUpdated": 1780583307812
+  },
+  {
+    "id": "task_u3DueOxDRFJjyD7S",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582951303,
+    "timeUpdated": 1780582951303
+  },
+  {
+    "id": "task_LbjCBiURZBVN29tL",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582951330,
+    "timeUpdated": 1780582951330
+  },
+  {
+    "id": "task_phkepTmFAudrGHFD",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582955655,
+    "timeUpdated": 1780582955655
+  },
+  {
+    "id": "task_6TUw4NfC22aZvWb7",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582955703,
+    "timeUpdated": 1780582955703
+  },
+  {
+    "id": "task_LGOSmCU3B8dRZyte",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582959808,
+    "timeUpdated": 1780582959808
+  },
+  {
+    "id": "task_J0JTUiRU8VV71Zr1",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582959840,
+    "timeUpdated": 1780582959840
+  },
+  {
+    "id": "task_AfS8RWudIbKk4TjM",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582963378,
+    "timeUpdated": 1780582963378
+  },
+  {
+    "id": "task_51t1M8kJv0vFegDN",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582963411,
+    "timeUpdated": 1780582963411
+  },
+  {
+    "id": "task_NVZEhSxbUK0hYagc",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582967196,
+    "timeUpdated": 1780582967196
+  },
+  {
+    "id": "task_H5AsWLm3htcsLtjA",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582967219,
+    "timeUpdated": 1780582967219
+  },
+  {
+    "id": "task_oB5pnRgXCkDAN7QW",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780582973335,
+    "timeUpdated": 1780582973335
+  },
+  {
+    "id": "task_v6K9W7UHT8WFJMHl",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780582973384,
+    "timeUpdated": 1780582973384
+  },
+  {
+    "id": "task_19Ba3v7evnuHCIkN",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780582980622,
+    "timeUpdated": 1780582982972
+  },
+  {
+    "id": "task_BpLInD48hAYjWLm9",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780582984145,
+    "timeUpdated": 1780582986075
+  },
+  {
+    "id": "task_8UHzGrv8TaynjvAg",
+    "title": "Resume",
+    "description": "Resume",
+    "profile": "coder",
+    "timeCreated": 1780582989148,
+    "timeUpdated": 1780582995545
+  },
+  {
+    "id": "task_Wq2rw1kinle69p9o",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780582994151,
+    "timeUpdated": 1780582994151
+  },
+  {
+    "id": "task_ITrGDv19Tn4gKk1G",
+    "title": "persistent test",
+    "description": "persistent test",
+    "profile": "coder",
+    "timeCreated": 1780583008791,
+    "timeUpdated": 1780583008791
+  },
+  {
+    "id": "task_zNKmxkzGvNIWeaS4",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583015222,
+    "timeUpdated": 1780583018618
+  },
+  {
+    "id": "task_q0o3kWa4GpBDxoX0",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583018325,
+    "timeUpdated": 1780583021555
+  },
+  {
+    "id": "task_dvTWE6rCEl4Z3xYG",
+    "title": "research this",
+    "description": "research this",
+    "profile": "coder",
+    "timeCreated": 1780583018813,
+    "timeUpdated": 1780583018813
+  },
+  {
+    "id": "task_1bczjHUl0nCYeNeA",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583022957,
+    "timeUpdated": 1780583022957
+  },
+  {
+    "id": "task_P8a4cxjq8cUz0Q7J",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583023814,
+    "timeUpdated": 1780583026035
+  },
+  {
+    "id": "task_yym0QK3FVkURIq2R",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583027960,
+    "timeUpdated": 1780583027960
+  },
+  {
+    "id": "task_lIhXyrq62eq78Kdn",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780583028819,
+    "timeUpdated": 1780583028819
+  },
+  {
+    "id": "task_iKz8NdOlciHjIZsy",
+    "title": "persistent test",
+    "description": "persistent test",
+    "profile": "coder",
+    "timeCreated": 1780583043686,
+    "timeUpdated": 1780583043686
+  },
+  {
+    "id": "task_BKZ3qtmGJfUY4azB",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583051412,
+    "timeUpdated": 1780583054386
+  },
+  {
+    "id": "task_4EuZrkjwgVRtWsfw",
+    "title": "Research Request",
+    "description": "Research Request",
+    "profile": "coder",
+    "timeCreated": 1780583053723,
+    "timeUpdated": 1780583066529
+  },
+  {
+    "id": "task_K0A1eWnwVFqSxCXE",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583054746,
+    "timeUpdated": 1780583056858
+  },
+  {
+    "id": "task_QieyTu7JqrOjRIzq",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583056778,
+    "timeUpdated": 1780583056778
+  },
+  {
+    "id": "task_V9QrE1dM2diN2ID8",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583058726,
+    "timeUpdated": 1780583060936
+  },
+  {
+    "id": "task_D6Usu16aNBdpUgvR",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583061780,
+    "timeUpdated": 1780583061780
+  },
+  {
+    "id": "task_EZWgcMvGbFKKfopz",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583063728,
+    "timeUpdated": 1780583066327
+  },
+  {
+    "id": "task_RTR3U7Dnle5dh51L",
+    "title": "persistent test",
+    "description": "persistent test",
+    "profile": "coder",
+    "timeCreated": 1780583077507,
+    "timeUpdated": 1780583077507
+  },
+  {
+    "id": "task_6HzU3sC5tROGqjGG",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583083471,
+    "timeUpdated": 1780583085747
+  },
+  {
+    "id": "task_cEXIdk0raMGjoG1v",
+    "title": "research this",
+    "description": "research this",
+    "profile": "coder",
+    "timeCreated": 1780583087546,
+    "timeUpdated": 1780583087546
+  },
+  {
+    "id": "task_yj6zh9dXaHJVWpzQ",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583088476,
+    "timeUpdated": 1780583091382
+  },
+  {
+    "id": "task_nScrx6SMMlA9n7mB",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583091388,
+    "timeUpdated": 1780583091388
+  },
+  {
+    "id": "task_q68v9tGw25JIrwRf",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583092548,
+    "timeUpdated": 1780583095099
+  },
+  {
+    "id": "task_TCNTLhZgIMCLzyKv",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583096118,
+    "timeUpdated": 1780583098240
+  },
+  {
+    "id": "task_qyUOzVdZNXfdIOxx",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583096389,
+    "timeUpdated": 1780583096389
+  },
+  {
+    "id": "task_ynAU7H4YPYet7Ewl",
+    "title": "persistent test",
+    "description": "persistent test",
+    "profile": "coder",
+    "timeCreated": 1780583112108,
+    "timeUpdated": 1780583112108
+  },
+  {
+    "id": "task_lPW5MDV2NF6NNroT",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583115878,
+    "timeUpdated": 1780583118428
+  },
+  {
+    "id": "task_KX0plLWeP2rlDkyY",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583120883,
+    "timeUpdated": 1780583123417
+  },
+  {
+    "id": "task_MYHcvGNWnqYbFXvE",
+    "title": "research this",
+    "description": "research this",
+    "profile": "coder",
+    "timeCreated": 1780583122143,
+    "timeUpdated": 1780583122143
+  },
+  {
+    "id": "task_8TrPWwQ5BcU90W9Q",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583124266,
+    "timeUpdated": 1780583124266
+  },
+  {
+    "id": "task_QvPL9TZuOKYAljZv",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583127146,
+    "timeUpdated": 1780583129729
+  },
+  {
+    "id": "task_ViKkKsah9en09Glb",
+    "title": "resume",
+    "description": "resume",
+    "profile": "coder",
+    "timeCreated": 1780583129269,
+    "timeUpdated": 1780583129269
+  },
+  {
+    "id": "task_94vaMSDGPXLcYFvd",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780583131515,
+    "timeUpdated": 1780583133807
+  },
+  {
+    "id": "task_u1jGpGQ8KkIqiVrZ",
+    "title": "Summarize the current work to the specs directory.",
+    "description": "Summarize the current work to the specs directory.",
+    "profile": "coder",
+    "timeCreated": 1780584061629,
+    "timeUpdated": 1780587744420
+  },
+  {
+    "id": "task_vgULqyVg1BaXJYnP",
+    "title": "Dual Assistant Display",
+    "description": "Dual Assistant Display",
+    "profile": "coder",
+    "timeCreated": 1780587931316,
+    "timeUpdated": 1780599182559
+  },
+  {
+    "id": "task_NRmdmcroZ5ECY4Jm",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1780588773431,
+    "timeUpdated": 1780588775573
+  },
+  {
+    "id": "task_WlXFu9rVIwc0U3Rs",
+    "title": "Question Mark",
+    "description": "Question Mark",
+    "profile": "coder",
+    "timeCreated": 1780600004746,
+    "timeUpdated": 1780600306246
+  },
+  {
+    "id": "task_48aVVMW371XtWZuB",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780600582808,
+    "timeUpdated": 1780600582808
+  },
+  {
+    "id": "task_u3sMWfOC1b9II2J4",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780600582837,
+    "timeUpdated": 1780600582837
+  },
+  {
+    "id": "task_c7nQj2sgeNURUJQN",
+    "title": "Retry Request",
+    "description": "Retry Request",
+    "profile": "coder",
+    "timeCreated": 1780600806938,
+    "timeUpdated": 1780600959255
+  },
+  {
+    "id": "task_TcqQpx8xL5YDjgi1",
+    "title": "Good Commit",
+    "description": "Good Commit",
+    "profile": "coder",
+    "timeCreated": 1780601108136,
+    "timeUpdated": 1780602118584
+  },
+  {
+    "id": "task_LcoF0IUkgGJ9AP1h",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780601754553,
+    "timeUpdated": 1780601754553
+  },
+  {
+    "id": "task_SvfxjzWz9ziRI9L8",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780601754601,
+    "timeUpdated": 1780601754601
+  },
+  {
+    "id": "task_XHPFIDHkWVE9OJLA",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780601907033,
+    "timeUpdated": 1780601907033
+  },
+  {
+    "id": "task_v3PFzTYDwbK2W692",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780601907079,
+    "timeUpdated": 1780601907079
   }
 ]

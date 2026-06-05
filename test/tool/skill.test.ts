@@ -64,6 +64,39 @@ describe("discoverSkills", () => {
     expect(skills[0]!.content).toBe("project content")
   })
 
+  test("project skills override global skills by default", () => {
+    const originalCwd = process.cwd()
+    const originalHome = process.env.HOME
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "atom-skill-project-"))
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "atom-skill-home-"))
+
+    try {
+      process.chdir(projectDir)
+      process.env.HOME = homeDir
+      clearCache()
+
+      writeSkill(path.join(homeDir, ".config", "quark", "skills"), "shared", "Global version", "global content")
+      writeSkill(path.join(projectDir, ".quark", "skills"), "shared", "Project version", "project content")
+
+      const skill = discoverSkills().find((s) => s.name === "shared")
+
+      expect(skill).toBeDefined()
+      expect(skill!.description).toBe("Project version")
+      expect(skill!.content).toBe("project content")
+      expect(skill!.location).toContain(path.join(projectDir, ".quark", "skills"))
+    } finally {
+      process.chdir(originalCwd)
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      fs.rmSync(projectDir, { recursive: true, force: true })
+      fs.rmSync(homeDir, { recursive: true, force: true })
+      clearCache()
+    }
+  })
+
   test("falls back to directory name when no name in frontmatter", () => {
     const skillDir = path.join(tmpDir, "my-skill")
     fs.mkdirSync(skillDir, { recursive: true })

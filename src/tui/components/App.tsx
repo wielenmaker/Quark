@@ -1063,7 +1063,6 @@ export const App: Component<AppProps> = (props) => {
               if (sideId) props.onCancel(sideId)
               setAsyncSessionId(null)
             }}
-            onToggleCollapse={() => dispatch(state, { type: "toggle-async-collapse" })}
             onSubmit={(text: string) => {
               if (!text.trim()) return
               let sid = asyncSessionId()

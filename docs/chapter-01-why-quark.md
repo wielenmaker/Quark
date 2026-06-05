@@ -16,7 +16,7 @@ So here I was: the good tools are closed-source and provider-locked. The open-so
 
 I made Quark to solve exactly this problem. The goal is simple:
 
-1. **Model freedom** — switch between providers and models freely, mid-session if I want to. No lock-in.
+1. **Model freedom** — switch between providers and models freely, between turns if I want to. No lock-in.
 2. **Hackable** — plug it into my research pipeline at work with minimal changes to existing code. CLI-first, headless mode, SDK-embeddable.
 3. **Data ownership** — my conversations, my data, on my disk. No one else’s infrastructure (Yes, the prompts still hit a provider’s server — but the conversation history lives on my disk, not locked inside someone else’s infrastructure.)
 
@@ -24,7 +24,7 @@ I made Quark to solve exactly this problem. The goal is simple:
 
 Quark is an **agent harness**. The model is a pluggable component — the harness owns everything else: the agent loop, the tools, the memory, the guardrails. My belief is that you can push LLM performance far without retraining models, if you build the right harness around them.
 
-Quark is not trying to be a thin wrapper over an API. It’s feature-rich: a full-packaged coding agent with a beautiful TUI, a CLI for quick one-offs, support for remote control, and eventually a desktop environment. But more than features, it’s an **experiment platform** — a place where I can test ideas about agent architecture, context management, and human-agent collaboration.
+Quark is not trying to be a thin wrapper over an API. It’s feature-rich: a packaged coding agent with a beautiful TUI, a CLI for quick one-offs, headless and SDK entry points, and web-facing surfaces that can grow toward remote control and a desktop environment. But more than features, it’s an **experiment platform** — a place where I can test ideas about agent architecture, context management, and human-agent collaboration.
 
 ## 1.4 The Philosophy This Book Will Unpack
 
@@ -34,7 +34,7 @@ In the chapters ahead, I’ll walk through each of those decisions:
 
 - How the **agent loop** works from first principles (Chapter 2)
 - Why **profiles** matter — keeping agent context uncontaminated by irrelevant tools and skills (Chapter 3)
-- How the **TUI** uses event sourcing to stay fast and debuggable (Chapter 4)
+- How the **TUI** projects the agent event stream into a fast, debuggable interface (Chapter 4)
 - How **agent skills** and **permissions** extend the agent without bloating the prompt (Chapter 5)
 - How the **CLI** ties everything together into a distributable tool (Chapter 6)
 

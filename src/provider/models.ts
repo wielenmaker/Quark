@@ -7,7 +7,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { parseModelSpec } from "../config/config";
-import { bus } from "../session/events";
 import { debug } from "../debug";
 
 const dlog = debug("models");
@@ -38,6 +37,10 @@ interface ModelsDevProvider {
 type ModelsDevData = Record<string, ModelsDevProvider>;
 
 let cached: ModelsDevData | null = null;
+
+export function __setModelsDevDataForTest(data: ModelsDevData | null): void {
+  cached = data;
+}
 
 function readCache(): ModelsDevData | null {
   try {
@@ -92,13 +95,7 @@ export async function refreshLMStudio(
     const res = await fetch(`${baseUrl}/api/v1/models`, {
       signal: AbortSignal.timeout(5_000),
     });
-    if (!res.ok) {
-      bus.emit("error", {
-        sessionId: "",
-        error: new Error(`LM Studio returned ${res.status}: ${res.statusText}`),
-      });
-      return;
-    }
+    if (!res.ok) return;
     const data = (await res.json()) as {
       models: Array<{
         key: string;
@@ -121,11 +118,8 @@ export async function refreshLMStudio(
       const short = m.key.split("/").pop();
       if (short) lmStudioCache.set(short, limit);
     }
-  } catch (err) {
-    bus.emit("error", {
-      sessionId: "",
-      error: new Error("LM Studio not reachable at " + baseUrl),
-    });
+  } catch {
+    // best-effort
   }
 }
 
@@ -141,10 +135,7 @@ export function getModelLimit(modelSpec: string): ModelLimit | null {
   const parsed = parseModelSpec(modelSpec);
 
   if (!parsed.provider) {
-    bus.emit("error", {
-      sessionId: "",
-      error: new Error(`Model spec "${modelSpec}" missing provider prefix`),
-    });
+    dlog("%s → missing provider prefix", modelSpec);
     return null;
   }
 
@@ -160,12 +151,7 @@ export function getModelLimit(modelSpec: string): ModelLimit | null {
       );
       return cached;
     }
-    bus.emit("error", {
-      sessionId: "",
-      error: new Error(
-        `Model "${modelSpec}" not found in LM Studio. Is it downloaded?`,
-      ),
-    });
+    dlog("%s → not found in LM Studio cache", modelSpec);
     return null;
   }
 
@@ -206,19 +192,10 @@ export function getModelLimit(modelSpec: string): ModelLimit | null {
     }
   }
 
-  // Only emit bus error for providers that exist in models.dev but are
-  // missing the specific model (genuine misconfiguration). Custom providers
-  // not in models.dev silently return null — their limits are unknown.
-  if (provider) {
-    bus.emit("error", {
-      sessionId: "",
-      error: new Error(
-        `Model "${parsed.model}" not found in provider "${providerId}"`,
-      ),
-    });
-  }
-
-  dlog("%s → not found (returns 0)", modelSpec);
+  // models.dev is metadata, not an availability source. Providers may serve
+  // models that are newer or private, so a catalog miss only means the context
+  // limit is unknown.
+  dlog("%s → not found in models.dev (returns null)", modelSpec);
   return null;
 }
 

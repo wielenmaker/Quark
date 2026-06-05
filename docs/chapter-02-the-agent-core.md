@@ -1,355 +1,561 @@
 # Chapter 2: The Agent Core
 
-Before profiles, before the TUI, before skills and permissions — there was just the loop. A coding agent, at its absolute minimum, needs four things: **tools** to act on the world, **memory** to remember what happened, a **brain** to reason about what to do next, and a **loop** to tie them together. Everything else Quark does is layered on top of these four primitives. So that’s where we start.
+> **Rule of the Minimum Loop: An agent is four primitives — tools, memory,
+> a brain, and a loop. Build each one before you build anything else.**
 
-## 2.1 Problem Breakdown
+Chapter 1 made the case for Quark as a harness — the system of tools, memory,
+persistence, and guardrails that surrounds the model. This chapter builds that
+harness from first principles. By the end, you will have seen a working agent
+loop: the model receives a task, picks up tools, remembers what it did, and
+iterates until the work is done. Everything else — profiles, the TUI, skills,
+sub-agents — is ornamentation on this core.
 
-If you strip away every feature and look at an agent as a pure function, it has this signature:
+We will build outward from the smallest thing that could possibly work, and we
+will look at the code as it actually exists, scars and all.
 
-```
-task → output
-```
+---
 
-The user gives you a task. You produce an output. But between input and output, the agent needs to:
+## 2.1 Start With The Smallest Mental Model
 
-1. **Act** — read files, write code, run commands, search the web. Without tools, the LLM is just a chatbot.
-2. **Remember** — track the conversation history so each turn builds on the last. Without memory, the agent has amnesia.
-3. **Think** — send the context to an LLM and get back reasoning and instructions. Without a brain, there’s no intelligence.
-4. **Iterate** — the LLM’s first response often says “I need to look at file X” or “run command Y.” The agent must execute those tool calls, feed the results back, and ask again. Without a loop, it stops after one response.
+> **The agent is `task → output`. Everything else is a harness problem.**
 
-These four pieces form a closed cycle:
+A coding agent looks simple from the outside. You type a sentence. The machine
+thinks, acts, and responds. But the moment you try to build one, the
+implementation fractures into a dozen sub-problems. What tools does the model
+have? Where does conversation history live? How do you know which provider to
+call? What happens when the model asks for a tool, gets a result, and needs to
+call another? What happens when the tool fails? When the context overflows?
 
-```diagram
-╭──────────╮    ╭──────────╮    ╭──────────╮
-│  Memory  │───▶│  Brain   │───▶│  Tools   │
-╰──────────╯    ╰──────────╯    ╰─────┬────╯
-      ▲                                │
-      │                                │
-      │         ╭──────────╮           │
-      ╰─────────│   Loop   │◀──────────╯
-                ╰──────────╯
-```
+These are systems problems — the kind that operating systems, databases, and
+compilers have been solving for decades. The model supplies the reasoning.
+The harness supplies everything else.
 
-- Memory loads the conversation history
-- Brain processes it through the LLM
-- Tools execute whatever the LLM requested
-- Loop feeds results back into memory and starts again
+Quark's core identifies four primitives:
 
-Let’s build each piece.
+| Primitive | What It Does | Where It Lives |
+|-----------|-------------|----------------|
+| **Tools** | Gives the model hands — filesystem, shell, search. | `src/tool/tool.ts`, `src/tool/registry.ts`, `src/tool/ai-adapter.ts` |
+| **Memory** | Records what happened so the model can remember. | `src/session/session.ts`, `src/session/message.ts`, `src/storage/session-jsonl.ts` |
+| **Brain** | Resolves a provider/model string into an AI SDK model. | `src/provider/resolver.ts` |
+| **Loop** | Iterates: ask model → run tools → ask again → stop. | `src/session/prompt.ts`, `src/session/processor.ts` |
 
-## 2.2 Tools: The Universal Contract
+These four primitives form a dependency graph. You cannot build the loop
+without tools. You cannot build tools without a way to remember what they
+returned. And nothing works without a provider to call. The sections that
+follow address each one in the order they must be built.
 
-Every tool in Quark conforms to a single interface — [`ToolDef`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/tool/tool.ts#L73-L86). It’s deliberately minimal:
+---
+
+## 2.2 Tools: Giving The Model Hands
+
+Without tools, an LLM is a very expensive fortune teller. It predicts the next
+token given the previous ones, which is useful for writing prose and useless
+for reading a file, running a test, or editing code. Tools close this gap.
+They are the bridge between language and action.
+
+### The Universal Contract
+
+Quark defines every tool through a single interface — `ToolDef<T>` in
+`src/tool/tool.ts`. Every tool in the system, whether built-in or
+user-defined, must conform to this contract:
 
 ```typescript
 interface ToolDef<T extends z.ZodType = z.ZodType> {
-  id: string                              // unique identifier, e.g. "read", "bash"
-  description: string                     // sent to the LLM so it knows what the tool does
-  parameters: T                           // Zod schema — validates input before execution
+  id: string                    // unique identifier
+  description: string           // what the model sees
+  parameters: T                 // Zod schema → JSON Schema for the API
   execute(args: z.infer<T>, ctx: ToolContext): Promise<ToolResult>
 }
 ```
 
-Four fields. That’s it. The `description` is what the LLM sees — it’s how the model decides which tool to call and which arguments to pass. The `parameters` Zod schema does double duty: it generates the JSON Schema the LLM uses for structured tool calls, and it validates the arguments at runtime before they reach `execute`.
-
-The `execute` function receives parsed arguments and a `ToolContext` that carries the `sessionId`, `messageId`, `callId`, an `AbortSignal` for cancellation, and an `ask()` method (for future permission checks). It returns a `ToolResult` — a structured object with a human-readable `title`, the `output` (plain text or multi-modal content parts), and arbitrary `metadata` for TUI rendering.
-
-Take the [`read` tool](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/tool/read.ts) as an example — it’s one of the simplest:
-
-```typescript
-export const readTool = defineTool({
-  id: "read",
-  description: "Read a file or directory. Returns line-numbered content...",
-  parameters: z.object({
-    path: z.string().describe("Absolute or relative file/directory path"),
-    offset: z.number().optional().describe("Starting line number"),
-    limit: z.number().optional().describe("Maximum number of lines"),
-  }),
-  async execute(args, _ctx) {
-    const filePath = path.resolve(args.path)
-    if (!fs.existsSync(filePath)) {
-      return { title: `File not found`, output: `Error: ${filePath} does not exist`, ... }
-    }
-    // ... read and return content
-  },
-})
-```
-
-There’s no framework, no base class, no inheritance. Just a plain object satisfying the interface. The `defineTool` function is an identity helper — it exists purely for TypeScript type inference so the Zod schema’s output type flows into `execute`’s `args` parameter automatically.
-
-### The Registry
-
-Tools register themselves into a global [`Map<string, ToolDef>`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/tool/registry.ts#L9) at import time. Registration runs validation — checking that `id` is a non-empty string, `description` is present, `parameters` is a real Zod schema (Quark checks for `_def`, Zod’s internal marker), and `execute` is a function. Invalid tools are rejected immediately, not silently at runtime.
-
-```typescript
-const registry = new Map<string, ToolDef>()
-
-function register(tool: ToolDef): { ok: true } | { ok: false; error: ToolValidationError } {
-  // validate tool shape...
-  registry.set(tool.id, tool)
-  return { ok: true }
-}
-```
-
-When the agent loop needs tools for a given profile, it calls [`resolveToolSet()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/tool/ai-adapter.ts#L16-L35). This takes the profile’s list of tool IDs, resolves them from the registry, wraps each one in an AI SDK `tool()` wrapper that handles JSON Schema generation, permission checks, Zod validation, and abort signal racing, and returns a `ToolSet` — the shape the AI SDK’s `streamText()` expects. The profile declares `["read", "write", "edit", "bash"]` and the adapter does the rest. The LLM never sees a tool description for a tool it can’t use.
-
-## 2.3 Memory: Sessions, Messages, Parts
-
-Quark’s memory model is a three-level hierarchy: **Session → Message → Part**.
-
-### Session
-
-A [`Session`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/session.ts#L28-L51) is a conversation container — it has an `id` (nanoid), a `title` (auto-generated from the first message), the `directory` where work happened, and metadata like `timeCreated` and `timeUpdated`. Sessions come in three kinds: `main` (top-level), `subagent` (spawned by another agent), and `ephemeral` (in-memory only, never written to disk).
-
-### Messages
-
-Each user input and each LLM response is a [`MessageRow`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/message.ts#L63-L75): it has a `role` (`"user"` or `"assistant"`), a `modelId`, optional `finish` reason (`"stop"`, `"tool-calls"`, `"length"`), and token/cost accounting.
-
-### Parts: The Real Unit of History
-
-Messages are coarse. The real granularity lives in **parts** — the individual content chunks that make up a message. And the reason Quark models things this way isn’t arbitrary: it falls directly out of the AI SDK.
-
-Quark’s first-class interface is the TUI, not the CLI. The TUI needs to render streaming content in real time — each token as it arrives, each tool call as it’s invoked, each tool result as it completes. You can’t wait for the full assistant message to finish before showing anything. The user needs to see what’s happening *as it happens*.
-
-The AI SDK’s `streamText()` emits a [`fullStream`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text#fullstream) — an async iterable of fine-grained events. These events are already structured as discrete chunks:
-
-| AI SDK Event | What It Represents | Quark Maps To |
-|---|---|---|
-| `text-start` | A new text block is beginning | `TextPart` created, `text-start` bus event |
-| `text-delta` | A token of text arrived | Append to `TextPart`, `text-delta` bus event |
-| `text-end` | Text block complete | Finalize `TextPart`, `text-end` bus event |
-| `tool-input-start` | LLM is about to call a tool | `ToolPart` created (status: `pending`) |
-| `tool-call` | Full tool arguments received | `ToolPart` updated (status: `awaiting_approval`) |
-| `tool-result` | Tool executed successfully | `ToolPart` updated (status: `completed`, output set) |
-| `tool-error` | Tool execution failed | `ToolPart` updated (status: `error`, error set) |
-| `start-step` | A new reasoning step | `StepStartPart` persisted |
-| `finish-step` | Step complete, tokens counted | `StepFinishPart` persisted |
-| `reasoning-start/delta/end` | Extended thinking content | `ReasoningPart` streamed + persisted |
-
-Rather than inventing a different abstraction and then translating, Quark mirrors the SDK’s event model directly. [`processStream()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/processor.ts#L90-L228) is essentially a big `switch` over `event.type`. Each event becomes a `Part` persisted to the JSONL file, and each event fires a corresponding bus event that the TUI subscribes to:
-
-```typescript
-for await (const event of result.fullStream) {
-  switch (event.type) {
-    case "text-start": {
-      const partId = addPart({ messageId, sessionId, type: "text", data: { text: "" } })
-      bus.emit("text-start", { sessionId, messageId, partId })
-      break
-    }
-    case "text-delta": {
-      currentText.data.text += event.text
-      bus.emit("text-delta", { sessionId, messageId, partId, delta: event.text, text: currentText.data.text })
-      break
-    }
-    case "tool-call": {
-      match.data.status = "awaiting_approval"
-      match.data.input = event.input
-      updatePart(match.partId, match.data, sid, mid, "tool")
-      bus.emit("tool-input", { sessionId, messageId, partId, tool: event.toolName, input: match.data.input })
-      break
-    }
-    // ... every other event type
-  }
-}
-```
-
-This design has a nice property: the event stream is the same shape whether you’re watching it live in the TUI or replaying a session from disk. The JSONL file is a serialized `fullStream` — replay it, and the TUI renders identically. There’s no separate “live” and “history” code path.
-
-This granularity also means the TUI can render incrementally — showing each text token as it arrives, displaying tool calls as they execute, updating status from `pending` → `awaiting_approval` → `running` → `completed`. Nothing waits for the full message to finish.
-
-### Storage: Append-Only JSONL
-
-All of this is backed by [JSONL files](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/storage/session-jsonl.ts) — one per session, stored at `~/.config/quark/session/<id>/events.jsonl`. Every message, every part, every status update is appended as a newline-delimited JSON object. This is event sourcing in its simplest form: to replay a session, Quark reads the file from top to bottom and reconstructs the current state.
-
-```jsonl
-{"type":"message","id":"msg_01","role":"user","timeCreated":1716000000000}
-{"type":"part","id":"prt_01","messageId":"msg_01","kind":"text","data":{"text":"Fix the bug in main.ts"}}
-{"type":"message","id":"msg_02","role":"assistant","modelId":"copilot/gpt-4o","timeCreated":1716000001000}
-{"type":"part","id":"prt_02","messageId":"msg_02","kind":"text","data":{"text":"Let me read the file first."}}
-{"type":"part","id":"prt_03","messageId":"msg_02","kind":"tool","data":{"tool":"read","callId":"call_01","status":"completed","input":{"path":"main.ts"},"output":"..."}}
-```
-
-No migrations, no schema changes, no database. When `loadMessages()` is called, [`replaySessionFile()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/storage/session-jsonl.ts) replays the file. When a part is updated (e.g., a tool status changes from `running` to `completed`), a new event for the same `partId` is appended — later events overwrite earlier ones during replay. This is both dead simple and surprisingly robust.
-
-The key function is [`toModelMessages()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/message.ts) which converts the internal Message/Part structure into the `ModelMessage[]` format the AI SDK expects. It handles the mapping from Quark’s typed parts to the SDK’s content format — including multi-modal content for tools that return images.
-
-## 2.4 The Brain: Provider Resolution
-
-Quark doesn’t hardcode any LLM provider. Models are specified as strings in `"provider/model"` format — for example `"copilot/claude-sonnet-4.5"`, `"openai/gpt-4o"`, or `"ollama/llama3"`.
-
-The [`resolveModel()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/provider/resolver.ts#L14-L83) function is the single place where a model string becomes an actual AI SDK `LanguageModel` instance. It parses the spec, looks up the provider config from `~/.config/quark/config.yaml`, and dispatches to the right AI SDK factory:
-
-```typescript
-if (providerId === "copilot") {
-  return createOpenAICompatible({ name: "copilot", baseURL: "https://api.githubcopilot.com", ... })(modelId)
-}
-if (providerId === "openai") {
-  return createOpenAI({ apiKey, baseURL })(modelId)
-}
-if (providerId === "anthropic") {
-  return createAnthropic({ apiKey, baseURL })(modelId)
-}
-// Fallback: any OpenAI-compatible API
-return createOpenAICompatible({ name: providerId, baseURL, apiKey })(modelId)
-```
-
-The beauty of this is that Quark doesn’t care which provider you use. As long as there’s an OpenAI-compatible API, it works. This is why Quark can switch models mid-session: `resolveModel()` is called fresh at the start of every loop iteration, so changing the model via `/model` in the TUI takes effect on the very next turn.
-
-Your curated model list lives in config:
-
-```yaml
-models:
-  - copilot/claude-sonnet-4.5
-  - openai/gpt-4o
-  - ollama/llama3.2:latest
-main_model: copilot/claude-sonnet-4.5
-small_model: copilot/gpt-4o-mini
-```
-
-The `models` list drives the `/model` picker in the TUI. `main_model` is the default for the agent loop. `small_model` is used for lightweight tasks like auto-generating session titles.
-
-## 2.5 The Loop
-
-Now we have all three ingredients — tools, memory, brain. The loop is what makes them dance.
-
-### Entry Point: `prompt()`
-
-The [`prompt()` function](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/prompt.ts#L61-L171) is the public API. It:
-
-1. Creates or resumes a session
-2. Saves the user’s message (text + optional images)
-3. Sets up an `AbortController` for cancellation
-4. Fires a `loop-start` event
-5. Delegates to `loop()`
-6. Fires `loop-end` and cleans up
-
-### The Heart: `loop()`
-
-The [`loop()` function](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/prompt.ts#L211-L376) is where the agent actually runs. It’s a `while (true)` with seven steps:
-
-```
-while (true):
-  1. Load conversation history from storage
-  2. Build the system prompt
-  3. Check if auto-branching is needed
-  4. Create an assistant message row
-  5. Resolve tools for this profile
-  6. Call processStream() — stream the LLM response
-  7. Decide: continue (tool calls need follow-up), branch (context too long), or stop
-```
-
-Step 7 is the critical decision point. `processStream()` returns one of three outcomes:
-
-- **`"continue"`** — the LLM made tool calls. The loop must run again so the LLM can see the tool results and respond further. This is what makes the agent more than a single-turn chatbot.
-- **`"stop"`** — the LLM finished its response with a stop reason. The task is done (for now).
-- **`"branch"`** — the context window is nearly full. The loop triggers an automatic branch — it summarizes the conversation so far, creates a new child session with the summary as context, and continues there. The model never hits a context-length error.
-
-There are safety rails: a `max_steps` config (default 50) prevents runaway loops, and the `abort.aborted` check at the top of every iteration lets the user cancel at any time.
-
-### The Stream Processor
-
-[`processStream()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/processor.ts) is a long function that wraps the AI SDK’s `streamText()`. It iterates over the stream events, persisting each part to storage and emitting typed events on the event bus:
-
-| Stream Event | Persisted As | Bus Event |
-|---|---|---|
-| Text delta | `TextPartData` (appended to existing part) | `text-delta` |
-| Tool call start | `ToolPartData` (status: `pending`) | `tool-start` |
-| Tool input received | Update status to `awaiting_approval` | `tool-input` |
-| Tool execution | Update status to `running` | `tool-running` |
-| Tool result/error | Update status to `completed`/`error` | `tool-end` |
-| Step finish | `StepFinishData` (tokens, cost) | `step-finish` |
-| Reasoning delta | `ReasoningPartData` | `reasoning-delta` |
-
-Every event carries the `sessionId` so the TUI knows which session to update. This is the bridge between the headless agent loop and the real-time interface — the TUI subscribes to these events and renders them as they arrive, with zero polling.
-
-### Retry Logic
-
-LLM calls fail. The [`retry.ts`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/session/retry.ts) module classifies errors: rate limits (429), context-too-long, and transient server errors are retried with exponential backoff. Non-retryable errors (bad API key, model not found) are thrown immediately. The retry logic also respects `Retry-After` headers when providers send them.
-
-## 2.6 Putting It All Together
-
-Here’s the complete flow from user input to agent response, annotated with the actual files:
-
-```diagram
-User types "fix the bug in main.ts"
-         │
-         ▼
-   cli.ts → prompt()                    src/session/prompt.ts
-         │
-         ├─▶ createSession()            src/session/session.ts
-         ├─▶ saveUserMessage()          src/session/message.ts
-         │
-         ▼
-      loop()                            src/session/prompt.ts
-         │
-         ├─▶ loadMessages()             src/session/message.ts
-         │     └─▶ replaySessionFile()  src/storage/session-jsonl.ts
-         │
-         ├─▶ buildSystem()              src/session/system.ts
-         │
-         ├─▶ resolveModel()             src/provider/resolver.ts
-         │
-         ├─▶ resolveToolSet()           src/tool/ai-adapter.ts
-         │     └─▶ registry.get(id)     src/tool/registry.ts
-         │
-         └─▶ processStream()            src/session/processor.ts
-                │
-                ├─▶ streamText()        (AI SDK)
-                ├─▶ on text-delta  → addPart() + bus.emit("text-delta")
-                ├─▶ on tool-call   → addPart() + bus.emit("tool-start")
-                └─▶ on tool-result → updatePart() + bus.emit("tool-end")
-```
-
-This is the skeleton. Every feature in the chapters ahead — profiles, skills, permissions, the TUI, the CLI — hangs off these four primitives. Profiles constrain which tools are available. Skills extend the system prompt. Permissions gate tool execution. The TUI visualizes the event stream. The CLI wires it all to a terminal.
-
-## 2.7 Challenges and How I Solved Them
-
-Building the agent core wasn’t all smooth sailing. Here are a few problems I hit early and how I worked through them.
-
-### 2.7.1 GitHub Copilot Authentication
-
-I wanted Copilot as a provider because GitHub’s free tier gives you unlimited access to Claude Sonnet and GPT-4o with no API keys to manage. But Copilot doesn’t use API keys — it uses GitHub’s **OAuth Device Flow**.
-
-Here’s how it works: instead of generating a key in a dashboard and pasting it into config, you authenticate once through your browser. The [device flow](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/provider/copilot-auth.ts) has three steps:
-
-1. **Request a device code** — POST to `github.com/login/device/code` with a static `client_id` and scope `read:user`. GitHub returns a `device_code`, a `user_code` (e.g., `ABCD-1234`), and a `verification_uri`.
-
-2. **User authorizes in browser** — Quark prints the URL and code. You open `github.com/login/device`, enter the code, and authorize. Meanwhile, Quark polls `github.com/login/oauth/access_token` every few seconds.
-
-3. **Token saved** — once authorized, GitHub returns an access token. Quark saves it to `~/.config/quark/copilot-token.json` and loads it from disk on every subsequent request.
-
-The polling logic handles `authorization_pending` (keep waiting), `slow_down` (increase the interval), and `expired_token` (start over). The entire flow runs in the [login script](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/scripts/auth/copilot-login.ts), so users run it once and never think about it again.
-
-But auth was only the first Copilot challenge. Actually calling the API required a [custom fetch wrapper](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/provider/copilot-fetch.ts) because Copilot requires three non-standard headers on every request:
-
-- `Openai-Intent: conversation-edits` — tells Copilot’s API this is an agent conversation, not a one-shot completion
-- `x-initiator: user | agent` — marks whether the request is a new user prompt or an agent loop continuation (tool results fed back). This matters because Copilot applies different rate limits and behaviors to each. Quark infers it from the last message’s role: if it’s not `"user"`, it’s `"agent"`.
-- `Copilot-Vision-Request: true` — required when the request includes images, detected by scanning for `type: "image_url"` in message content
-
-On top of that, Copilot’s API has two quirks that break the AI SDK:
-
-1. **Missing `choices[].index`** — in non-streaming JSON responses, Copilot omits the `index` field on each choice. The `@ai-sdk/openai` provider crashes without it. Quark intercepts the response body and patches `index: i` onto each choice before the SDK sees it.
-
-2. **Rotating reasoning item IDs** — on `/responses` SSE streams, Copilot emits a fresh `item.id` on every `output_item.done` event instead of reusing the one from `output_item.added`. The AI SDK looks up items by ID and loses them when the ID changes. Quark rewrites the stream in-flight: it captures the canonical ID from the `added` event and substitutes it into every subsequent `done` event for that `output_index`.
-
-Neither of these hacks is elegant, but they’re confined to a single file — the rest of the codebase has no idea Copilot is quirky. That’s the value of the provider abstraction: weirdness gets walled off.
-
-### 2.7.2 JSONL vs SQLite: Why Append-Only Wins
-
-Early on, I had to decide how to store session data. The two obvious choices were SQLite and JSONL. Both are file-based, both work without a server, both are portable. The decision came down to one thing: what happens when two writes arrive at the same time.
-
-During normal sequential tool calling — the agent calls `read`, waits for the result, then calls `write`, waits for the result — there’s no contention. `addPart()` and `updatePart()` are called one at a time from the stream event loop. Reads happen only at two points: when the TUI loads a session to display messages, and at the top of each loop iteration to build the conversation history for the LLM. Neither of these overlaps with a write. Sequential mode works fine with either storage backend.
-
-But when the agent makes **parallel tool calls** — multiple tools in one response, executed concurrently by the AI SDK — you suddenly have two (or more) tool results racing to write to storage at the same time. That’s where the difference matters.
-
-With **JSONL**, the answer is built into the operating system. Quark opens the file with `O_APPEND` and calls [`appendFileSync()`](file:///Users/mac/01-CodeSpace/Personal-Lab/02-Experiment/Quark/src/storage/session-jsonl.ts#L117-L143). POSIX guarantees that `O_APPEND` writes are atomic: the file offset is set to the end of the file before each write, and no other write can interleave between the seek and the write. Each `appendFileSync()` call becomes one contiguous JSON line at the end of the file. Two concurrent appends? Two lines, in some order, both intact. No locks, no journals, no coordination — the kernel handles it.
-
-With **SQLite**, concurrent writes need WAL (Write-Ahead Logging) mode. Without WAL, one writer blocks all others — your parallel tool calls serialize at the storage layer, undoing the parallelism you wanted. With WAL, writers still contend for the write lock, and you now have an additional file (the WAL) that needs checkpointing. If the WAL grows too large, or a checkpoint fails mid-operation, or the process crashes before a checkpoint completes, you can lose writes. It’s not that WAL is broken — it works well for most applications — but for an append-only event log where every write is a single line and you never update in place, it’s a sledgehammer for a task that a single syscall handles perfectly.
-
-The JSONL approach also has a nice secondary benefit: the session file *is* the source of truth. There’s no separate schema, no migration scripts, no ORM. You can `cat ~/.config/quark/session/<id>/session.jsonl` and see every event, in order, as human-readable JSON. Debugging a corrupted session is a text editor, not a database repair tool.
-
-The tradeoff is that querying JSONL is slower than SQLite for anything beyond a linear replay. But Quark never needs to query across sessions, filter by timestamp, or join tables. It only ever replays one session file from top to bottom. So the tradeoff is pure upside.
+### From ToolDef to Model-Side Tool
+
+Quark needs tools that the user can write outside the binary — a 50-line
+TypeScript file dropped into `~/.config/quark/tools/` should work without
+recompilation. But the AI SDK expects tools in a specific shape:
+`description`, `inputSchema` (JSON Schema), and an `execute` callback. These
+two formats — the user's `ToolDef` and the SDK's `ToolSet` — are different
+enough that they need a bridge.
+
+`resolveToolSet` in `src/tool/ai-adapter.ts` is that bridge. For every tool ID
+in the agent's config, it looks up the `ToolDef` from the registry, converts
+the Zod schema to JSON Schema via `z.toJSONSchema()`, and wraps the `execute`
+call in three guardrails: a permission check via `askPermission`, Zod argument
+validation at the boundary, and event emission for the TUI. The result is an
+AI SDK `tool()` object that the provider can stream to.
+
+This adapter is where the harness philosophy becomes concrete. The tool
+definition — the `ToolDef` the user writes — is clean and portable. The
+adapter layers on the safety mechanisms the harness requires: permissions,
+validation, event emission. The tool author doesn't touch any of this.
+Undo snapshots, taken before execution, are handled separately by the
+harness and do not appear in the tool contract.
+
+### The Registry Pattern
+
+Tools live in a global `Map<string, ToolDef>` keyed by ID (`src/tool/registry.ts`).
+Registration is strict: duplicates are rejected, and every tool is validated
+on entry. The registry exposes `register()`, `get()`, `list()`, and `resolve()`
+— the standard CRUD surface you would expect. Crucially, `resolveAvailable()`
+tolerates missing tools — it skips IDs that were not loaded rather than
+throwing. This matters because some tools are loaded from
+`~/.config/quark/tools/` at bootstrap time, and if a profile declares a tool
+that hasn't been installed yet, the agent should still start. It will just have
+fewer tools available.
+
+Built-in tools (`read`, `look`, `skill`, `question`, `find_session`,
+`read_session`) are registered unconditionally in `src/bootstrap.ts`. All
+other tools — `bash`, `write`, `edit`, `grep`, `glob`, `websearch`, `todo`,
+and any custom tools the user writes — are loaded dynamically from
+`~/.config/quark/tools/{id}.ts` by `loadProfileTools` in `src/tool/loader.ts`.
+That loader uses Node's dynamic `import()` to load TypeScript files at
+runtime, validates the export against the `ToolDef` contract, checks that the
+tool ID matches the filename, and registers it into the global registry.
+
+This separation means the agent's capabilities can be extended
+without touching the Quark source tree. If you want a tool that queries your
+company's internal API, you write a 50-line TypeScript file, drop it in
+`~/.config/quark/tools/`, add the ID to your profile, and the agent has a new
+hand.
 
 ---
 
-But before we get to any of that, we need to talk about the single most important architectural decision in Quark: how profiles keep the agent’s context clean. That’s Chapter 3.
+## 2.3 Memory: Task, Sessions, Messages, Parts
+
+> **The model has no memory. The harness must supply one — and it must survive
+> a crash.**
+
+An LLM is stateless. Every call starts fresh. If you want the model to remember
+what it read three turns ago, or what tool it called, or what error it hit,
+you must store that history and feed it back on the next turn. Quark's memory
+model has four levels:
+
+```text
+Task → Session → Message → Part
+```
+
+Each level answers a different question:
+
+- **Task:** what is the human trying to accomplish? One Task = one goal or
+  problem space. It spans multiple sessions. It carries a description and a
+  profile ID. It is created synchronously on the first user message of the
+  first session and never rewritten.
+
+- **Session:** one attempt, branch, or focused conversation inside a Task.
+  A Session has a title, a working directory, a parent (for branches and
+  sub-agents), a kind (`main`, `subagent`, `ephemeral`), and a frozen summary
+  that gets set the first time the session branches.
+
+- **Message:** a single user or assistant turn. Each Message has a role, a
+  model ID, token counts, and a finish reason (`stop`, `tool-calls`, or
+  `length`). Messages are ordered chronologically within a Session.
+
+- **Part:** the atomic unit of streaming history. A Part can be text, a tool
+  call, a tool result, a reasoning block, a step boundary, an image, or a
+  summary. Parts are the real unit of replay — Messages are reconstructed
+  from their Parts during load.
+
+### Why Parts Matter
+
+The AI SDK streams events, not complete messages. You don't get a clean
+"assistant message." You get a firehose of `text-start`, `text-delta`,
+`text-end`, `tool-input-start`, `tool-input-delta`, `tool-call`,
+`tool-result`, `finish-step` — and if you don't persist each one as it arrives,
+you lose the ability to replay the conversation because the intermediate
+states are gone.
+
+Quark stores each event as a Part row as soon as it arrives. During replay,
+Parts are grouped by message ID, pulled apart by type, and reassembled into
+`ModelMessage[]` — the format the AI SDK expects. This is the job of
+`toModelMessages` in `src/session/message.ts`. It handles multi-modal content,
+reasoning blocks, tool calls with results, and compaction anchors (old
+messages replaced by a summary). The conversion is direct — Quark does not
+go through the SDK's `UIMessage` abstraction because Quark owns the Part
+shapes and can construct `ModelMessage[]` more cleanly.
+
+### Append-Only Storage: The JSONL Design
+
+Quark stores sessions as JSONL files — one line per event — in
+`~/.config/quark/session/<id>/session.jsonl`. Every event is a single
+`JSON.stringify` call written with `O_APPEND | O_WRONLY`. No line is ever
+modified or deleted.
+
+A relational database seems the natural choice for structured conversation
+data. Quark uses JSONL instead because of three properties that make it
+right for this use case:
+
+1. **Append is atomic on POSIX.** `appendFileSync` with `O_APPEND` guarantees
+   that each write is a single atomic operation — no locking, no transactions,
+   no corruption from concurrent writers. You can crash in the middle of a
+   streaming response and every Part that made it to disk is recoverable.
+
+2. **Replay is deterministic.** To reconstruct a session, you read the
+   JSONL file line by line and fold each event into the materialized state.
+   `replayEvents` in `src/storage/session-jsonl.ts` is a pure function — given
+   the same event log, it always produces the same `{ session, messages, parts }`.
+
+3. **The file is the source of truth.** You can copy it, back it up, grep it,
+   pipe it through `jq`. You don't need a database client to inspect your
+   conversation history.
+
+The cost is that replay is O(events). For very long sessions, reading and
+parsing the entire JSONL file on every load would be slow. Quark mitigates
+this with `meta.json` — a cached `Session` envelope written atomically (write
+to `.tmp`, `rename` over the real file) that carries the title, timestamps,
+and other metadata needed for session listings. The TUI's `/sessions` picker
+reads only `meta.json` files — it never replays a JSONL. The JSONL replay
+happens only when you actually open a session.
+
+### Ephemeral Sessions
+
+Not every session needs to touch disk. Sub-agents that run as one-shot
+processes, or quick throwaway questions, use ephemeral sessions — stored
+entirely in a `Map<string, Session>` in memory and never written to the
+filesystem. The `createSession` function checks the `ephemeral` flag and
+routes to the in-memory store accordingly. The event bus still works. Tools
+still work. The loop still runs. Nothing in the system except the storage
+layer knows whether a session is ephemeral.
+
+### Task and Branching: Continuity Across Context Boundaries
+
+A Task is the container that holds multiple Sessions together. When the
+agent's context gets too full — when the conversation history approaches
+the model's context window limit — Quark doesn't just truncate. It branches:
+
+1. The parent session's messages are split into old history (to summarize)
+   and recent context (to replay directly into the child).
+2. The old history is fed to the model with a prompt that asks for a
+   structured summary: relevant files and a continuation context.
+3. A new child Session is created under the same Task, seeded with the
+   summary as a user message, the recent messages replayed, and (optionally)
+   a user-provided steer prompt appended.
+
+The parent's summary is frozen the first time it branches. Every subsequent
+child branch inherits the same parent summary — siblings share a common
+understanding of where they came from. This is the `createBranch` function in
+`src/session/branch.ts`. It is not aggressive. It only triggers when the
+input tokens exceed 90% of the model's context window (configurable via
+`branching.threshold` in `config.yaml`).
+
+The Task is the glue. It lets you ask "what have we done on this problem?"
+across multiple sessions and branches. It lets you switch between branches
+without losing the big picture. And it costs almost nothing — a single row
+in `src/task/task.ts` created synchronously on the first user message.
+
+---
+
+## 2.4 The Brain: Provider Resolution
+
+> **A harness is only as flexible as the model string it can resolve.**
+
+Quark's initial goal was model agnosticism. The long-term interest is pushing
+local LLMs harder by improving the harness around them. But to make Quark
+useful enough to build Quark, I first needed OpenAI-compatible providers.
+Copilot came next because I already had access to it, and it exposed a few
+provider-specific scars worth telling.
+
+### The `provider/model` Convention
+
+Every model in Quark is specified as `provider/model`. The string
+`copilot/gpt-4o` means "use the `copilot` provider, model `gpt-4o`."
+`openai/gpt-4o` means "use the `openai` provider." `ollama/llama3.2` means
+"use the local Ollama instance." The convention is enforced at the config
+level — `parseModelSpec` in `src/config/config.ts` splits on the first `/`
+and rejects bare model names:
+
+```typescript
+const parsed = parseModelSpec("copilot/gpt-4o")
+// → { provider: "copilot", model: "gpt-4o" }
+```
+
+### The Resolver
+
+`resolveModel` in `src/provider/resolver.ts` is a 83-line function that turns
+a model spec string into an AI SDK `LanguageModel` object. It handles three
+cases:
+
+1. **Copilot.** This is the special case. Copilot uses GitHub's OAuth device
+   flow — you run `scripts/copilot-login.ts`, paste a code at a URL, and a
+   token is saved to `~/.config/quark/copilot-token.json`. The resolver reads
+   that token, attaches it to a custom `fetch` function (via
+   `src/provider/copilot-fetch.ts`), and feeds it to
+   `createOpenAICompatible()` with Copilot's base URL. The model string —
+   `gpt-4o`, `claude-sonnet-4.5`, etc. — is passed through to the API.
+
+2. **Known providers (openai, anthropic).** These get their own SDK
+   constructors: `createOpenAI()` or `createAnthropic()`. API keys are
+   resolved from the config file, which supports both literal values and
+   `env:VAR_NAME` references.
+
+3. **Everything else.** Any unknown provider ID is assumed to be an
+   OpenAI-compatible API. Quark reads the `baseURL` and `apiKey` from
+   `config.yaml` under `providers:`, resolves the key, and calls
+   `createOpenAICompatible()`. This means any local model server — Ollama,
+   LM Studio, vLLM, llama.cpp's server mode — is a one-line config entry.
+
+Plugin hooks (`provider.request.before` and `provider.request.error`) let
+plugins intercept and modify the provider/model resolution before and after
+the request. A plugin can rewrite the model string mid-flight, swap providers
+on error, or add custom headers. The resolver calls `fireHook` before
+returning the model object, so plugins see the same provider/model pair the
+rest of the system uses.
+
+### Provider-Specific Scars: Copilot
+
+Copilot is not a standard OpenAI-compatible API. It uses GitHub's OAuth device
+flow instead of API keys. Its fetch layer needs to refresh tokens, handle
+GitHub-specific error responses, and set the `editor-version` and
+`editor-plugin-version` headers that Copilot expects. The custom fetch in
+`src/provider/copilot-fetch.ts` wraps every outgoing request with automatic
+token injection and Copilot-specific header handling.
+
+This is the kind of thing that makes provider abstraction leak. The resolver
+presents a uniform interface — `resolveModel("copilot/gpt-4o")` works exactly
+like `resolveModel("openai/gpt-4o")` — but the Copilot path is 20 lines of
+special-case code. The harness philosophy says: isolate that special case in
+the resolver, don't let it leak into the loop, and document it so the next
+person who adds a weird provider knows where to put their special-case code.
+
+### Model Limits
+
+Every model has limits — context window, max output tokens, sometimes an
+input token cap. Quark reads these from a static data source via
+`getModelLimit()` in `src/provider/models.ts`. The loop uses the context window
+to decide when to branch. The TUI uses it to render the token usage bar. These
+limits are not hardcoded into the resolver — they are queried after the model
+is resolved, because different Copilot models have different limits and the
+user should not have to configure them manually.
+
+---
+
+## 2.5 The Loop: Turning One Response Into An Agent
+
+> **One call to the model is a completion. Many calls, with tools between them,
+> is an agent.**
+
+The loop is where everything comes together. It lives in `src/session/prompt.ts`
+and `src/session/processor.ts`. Together they are about 900 lines of code —
+approximately the length of this chapter so far. Here is the entire loop,
+stripped of error handling and branching:
+
+```typescript
+while (true) {
+  const messages = loadMessages(sessionId)
+  const modelMessages = toModelMessages(messages, parts)
+  const system = buildSystem(agent)
+  const tools = resolveToolSet(agent, sessionId, messageId, abort)
+  const result = await processStream({ model, system, messages: modelMessages, tools, ... })
+  if (result === "continue") continue  // model called tools, loop again
+  break                                 // model said stop
+}
+```
+
+That is the skeleton. The flesh is what makes it reliable.
+
+### The Entry Point: `prompt()`
+
+`prompt()` in `src/session/prompt.ts` is the public API. It accepts a user
+message (with optional images), creates or resumes a session, saves the user
+message, initializes the task if this is the first message, and enters the
+loop. It returns a `{ sessionId }` so the caller knows where the conversation
+landed.
+
+The function is straightforward, but it enforces several invariants:
+
+1. **Session creation is lazy.** If you pass a `sessionId`, Quark resumes it.
+   If you don't, a new session is created. No session exists until the first
+   message is sent.
+
+2. **Task assignment is synchronous and idempotent.** `initializeSessionFromMessage`
+   in `src/session/initializer.ts` generates a fallback title from the first
+   line of the user's message, creates a Task, and links the session to it via
+   `taskId`. This runs synchronously so the task ID is guaranteed to exist
+   before any subsequent action (like `/steer`) tries to use it. A follow-up
+   LLM call (`upgradeSessionTitle`) refines the title asynchronously, but it
+   never touches `taskId`.
+
+3. **Abort controllers are tracked per session.** The `active` map in
+   `prompt.ts` stores one `AbortController` per running session. If the user
+   presses Escape in the TUI, `cancel(sessionId)` calls `controller.abort()`,
+   which propagates through the LLM stream and all active tool calls.
+
+### The Driver: `loop()`
+
+`loop()` is the `while(true)` block. It:
+
+1. Resolves the model (with thinking provider options if applicable).
+2. Loads the conversation history and converts it to `ModelMessage[]`.
+3. Checks for auto-branching (context too close to the window limit).
+4. Creates an assistant message row.
+5. Resolves the tool set for this iteration.
+6. Calls `processStream()` and inspects the result.
+
+The result is one of three values: `"continue"` (the model called tools, loop
+again), `"stop"` (the model finished), or `"branch"` (the context overflowed
+mid-stream and the loop should branch and continue). The `max_steps` config
+value (default 10) prevents runaway loops — if the model gets stuck in a
+tool-call cycle, the loop stops after 10 iterations.
+
+### The Stream Processor: `processStream()`
+
+`processStream()` in `src/session/processor.ts` is the largest single function
+in the codebase — 470 lines that convert an AI SDK stream into persisted Parts
+and emitted events. It:
+
+1. Calls `streamText()` from the AI SDK.
+2. Iterates over `fullStream` events — text deltas, tool calls, tool results,
+   step boundaries, reasoning blocks, errors.
+3. For each event, persists the data as a Part (via `addPart` or `updatePart`),
+   emits a typed event to the bus (so the TUI can update in real time), and
+   tracks the current state (which text part is accumulating, which tool calls
+   are pending).
+4. When the stream finishes, checks the `finishReason` — `"tool-calls"` means
+   another iteration, `"stop"` means the model is done.
+5. Handles errors with retry logic: retryable errors (429, 5xx, timeouts) get
+   exponential backoff, context-too-long errors trigger branching, and fatal
+   errors propagate to the caller.
+
+The retry logic in `src/session/retry.ts` is worth examining. It classifies
+errors by HTTP status code and message patterns. Retryable errors get up to
+five attempts with exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 30s
+with jitter). It respects `retry-after` and `x-ratelimit-reset` headers from
+providers. And it has a special case: if a server returns a retry delay over
+five minutes (e.g. a monthly quota reset), the error is surfaced immediately
+rather than making the user wait.
+
+### The Event Bus: Decoupling the Loop from the UI
+
+The processor does not know about the TUI. It does not import any TUI
+components. It emits typed events to a singleton bus — `src/session/events.ts`
+— and whatever is listening decides what to do with them.
+
+The bus carries ~30 event types: `text-delta`, `tool-start`, `tool-end`,
+`reasoning-delta`, `permission-request`, `error`, `context-too-long`,
+`loop-start`, `loop-end`, and so on. Each event payload is a typed interface.
+The bus itself is a wrapper around Node's `EventEmitter`:
+
+```typescript
+bus.emit("text-delta", { sessionId, messageId, partId, delta, text })
+```
+
+This decoupling means the `processStream` function can
+be called from the TUI (where events update React components), from the CLI
+(where events print to stdout), from the ACP server (where events are
+forwarded over WebSocket), and from tests (where events are captured for
+assertions) — all without changing a line of the loop. The loop does one
+thing: it produces a stream of typed events. How those events are consumed
+is someone else's problem.
+
+---
+
+## 2.6 Implementation Scars
+
+> **Show the scars. If the implementation were clean, the problem was too
+> easy.**
+
+Every agent harness has parts that don't fit neatly into any architectural
+diagram. Three are worth documenting — each one evidence of the system
+colliding with reality.
+
+### Copilot's Custom Fetch
+
+As noted in Section 2.4, Copilot uses OAuth device flow instead of API keys.
+The resolver isolates this in `src/provider/copilot-fetch.ts`, but the
+isolation is not perfect. The custom fetch wraps every outgoing request, and
+because Copilot is built on the Azure OpenAI API, some responses carry
+opaque Copilot-specific part IDs that the AI SDK can't parse. The processor
+handles these with a targeted suppression:
+
+```typescript
+case "error": {
+  const errMsg = String(event.error)
+  if (/text part .+ not found/.test(errMsg)) break  // Copilot artifact, ignore
+  throw event.error
+}
+```
+
+This is a one-line special case that suppresses a known benign error from a
+specific provider. It is ugly. It is also correct — suppressing that error
+lets the stream continue, and the alternative (crashing on a non-fatal
+artifact) would make Copilot sessions unreliable. The rule is: special-case
+code belongs in the provider layer when possible, and in the processor only
+when the provider layer can't catch it. This one falls in the second category.
+
+### Context-Too-Long Mid-Stream
+
+The model doesn't always know when its context is about to overflow. Sometimes
+it streams through a full response and then, on the next tool call, the
+provider rejects the request because the prompt is too large. But sometimes
+it overflows *mid-stream* — the `finish-step` event reports an input token
+count that exceeds the branching threshold before the next tool round even
+begins.
+
+The processor handles this with a `needsBranch` flag. When a `finish-step`
+event reports input tokens over the threshold, the flag is set, the stream
+loop breaks, and `processStream` returns `"branch"` instead of `"continue"`.
+The outer loop then creates a branch and continues from the child session.
+
+This is subtle because branching mid-stream means the current assistant message
+is left incomplete — it called tools but those tools never ran in the new
+session. The branch carries forward a summary of the old context, so the model
+can pick up where it left off, but the old message's tool calls are orphaned.
+This is correct behavior: replaying orphaned tool calls into a branch with a
+fresh summary would be nonsensical.
+
+### Append-Only Storage and the `updatePart` Problem
+
+JSONL is append-only, which means you cannot modify a line once it is written.
+But the processor needs to update Parts — a tool part starts as `"pending"`,
+then moves to `"awaiting_approval"`, then `"running"`, then `"completed"` or
+`"error"`. A text part starts empty and accumulates deltas.
+
+The solution is to append a *new* PartEvent with the same `partId`. During
+replay, `replayEvents` uses a `Map<string, PartRow>` keyed by `partId`, so
+later events with the same ID overwrite earlier ones. The function is called
+`updatePart`, but it is really `appendPartSnapshot` — it writes a new line
+with the latest state.
+
+This means the JSONL file grows faster than a database would. Every text delta
+does not write a new line (the processor batches text in memory and only
+persists on `text-end`), but tool state transitions do produce multiple lines
+for the same logical Part. The tradeoff is accepted because disk is cheap and
+the append-only design eliminates locking. If you ever need to reclaim space,
+you can rebuild the file by replaying it into a new JSONL and discarding the
+intermediate snapshots — but in practice, this has not been necessary.
+
+---
+
+## 2.7 Transition To Chapter 3
+
+> **Once the core loop works, the next problem appears: if every agent sees
+> every tool, every skill, and every instruction, the context becomes noisy
+> before the task even starts.**
+
+By this point, you have seen Quark's agent core built from the inside:
+
+- **Tools** give the model hands — a universal contract, a registry, and an
+  adapter that layers on permissions, validation, and undo snapshots.
+- **Memory** gives the loop continuity — four levels from Task to Part, stored
+  as append-only JSONL, replayed into the model's message format on each
+  iteration.
+- **The provider resolver** gives the harness a brain — a single function that
+  turns `copilot/gpt-4o` or `ollama/llama3.2` into a callable model, with
+  plugin hooks for interception.
+- **The loop** turns one call into an agent — a `while(true)` block that loads
+  history, calls the model, runs tools, persists everything as events, and
+  decides whether to continue, stop, or branch.
+- **The event bus** decouples the core from the UI — the processor emits typed
+  events; the TUI, CLI, and ACP server consume them independently.
+
+What you do not yet have is **context isolation**. The agent core described in
+this chapter assumes a single identity — one system prompt, one tool set, one
+skill set. But a real coding agent needs to be a coder sometimes, a researcher
+other times, and a tester still other times. A coding agent should not carry
+100 tools it will never call. A research agent should not carry shell and edit
+tools by default. A tester agent should not need web-search descriptions
+unless testing demands them.
+
+Limiting what each agent sees keeps the context lean and the model focused.
+Chapter 3 introduces profiles:
+bounded agent identities that declare exactly what tools, skills, and
+instructions they need — and nothing more.

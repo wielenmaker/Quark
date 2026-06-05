@@ -1,13 +1,14 @@
 ---
 title: Quark — Architecture & Design Reference
 date_created: 2026-04-16
-date_modified: 2026-05-06
-revision: 4
+date_modified: 2026-06-01
+revision: 5
 history:
   - 2026-04-16: Initial architecture document (v2.0)
   - 2026-05-06: Added YAML frontmatter, desktop surface, EPIC-17 to roadmap
   - 2026-05-06: Added desktop section (5.4), Tauri+Vite to tech stack, quark-desktop/ to directory structure
   - 2026-05-06: Added frontend⟷backend communication ASCII diagrams to section 5.4
+  - 2026-06-01: Replaced compaction with session branching; updated module directory, agent loop flow, provider structure, tool list, and removed stale references
 status: done
 ---
 
@@ -55,7 +56,7 @@ Users teach the agent their workflow through tools they define, skills they writ
 │                                       Desktop (Tauri 2)      │
 ├──────────────────────────────────────────────────────────────┤
 │                    SDK Public API (@quark/sdk)                │
-│    bootstrap · prompt · cancel · compact · bus · register     │
+│    bootstrap · prompt · cancel · bus · register               │
 ├────────────┬─────────────┬──────────────┬────────────────────┤
 │ Agent Loop │ Tool System │ Skill System │ Permission System  │
 │ (prompt.ts)│ (registry)  │ (skill.ts)   │ (permission.ts)    │
@@ -101,23 +102,24 @@ src/
   provider/
     copilot-auth.ts           # Token loading + refresh
     copilot-fetch.ts          # Custom fetch wrapper (auth, thinking injection)
-    claude-web-proxy-auth.ts  # Web proxy auth
+    custom-fetch.ts           # Generic custom fetch utility
     models.ts                 # models.dev cache + getModelLimit()
-    provider.ts               # createCopilotProvider(), routing, isClaude()
+    resolver.ts               # resolveModel() — provider routing
+    thinking.ts               # Extended thinking configuration per model
 
   session/
-    compact-resolver.ts       # Deduplication guard + compaction dispatch
-    compaction.ts             # shouldCompact(), general(), anchored()
+    branch.ts                 # Session branching (LLM summary + child session)
+    branch-controller.ts      # Auto-branch threshold check + orchestration
+    context.ts                # Token estimation, context window, threshold utils
     event-writer.ts           # Sub-agent stderr NDJSON writer
     events.ts                 # TypedBus + BusEvents interface
+    initializer.ts            # Session title + task initialization
     message.ts                # Message/part CRUD + toModelMessages()
-    methods/
-      anchored.ts             # In-session compaction
-      general.ts              # New-session compaction
     processor.ts              # processStream() — AI SDK stream handler
     prompt.ts                 # prompt(), loop(), cancel(), isActive()
     retry.ts                  # isRetryable(), exponential backoff
     session.ts                # createSession(), getSession(), listSessions()
+    session-switch.ts         # emitSessionSwitch() — context handoff on branch
     system.ts                 # buildSystem() — system prompt assembly
     title.ts                  # generateSessionTitle() — async, non-blocking
 
@@ -130,8 +132,10 @@ src/
     session-path.ts           # Filesystem path helpers
 
   tool/
-    compact.ts                # Built-in compact tool
+    ai-adapter.ts             # ToolDef → AI SDK tool() conversion
+    find_session.ts           # Built-in session find/switch tool
     loader.ts                 # External tool file loader
+    look.ts                   # Built-in image viewer tool
     question.ts               # Built-in question tool
     read.ts                   # Built-in read tool
     registry.ts               # register(), list(), resolve()
@@ -205,9 +209,11 @@ prompt(input)
   │
   ├─ Create or resume session
   ├─ saveUserMessage()
+  ├─ setCurrentTurn() + preTurnSnapshot() — undo foundation
   ├─ emit "session-created", "user-message"
   ├─ fireHook("session.created")
-  ├─ generateSessionTitle() — background, non-blocking
+  ├─ initializeSessionFromMessage() — sync task + fallback title
+  ├─ upgradeSessionTitle() — async LLM title refinement
   │
   └─ loop(sessionId, abort, agent, modelOpt)
        │
@@ -215,14 +221,13 @@ prompt(input)
        ├─ [guard] step > max_steps → break
        ├─ fireHook("loop.step.before")
        │
-       ├─ 0. Run pending compaction (if queued)
-       │
        ├─ 1. loadMessages() → toModelMessages()
        ├─ 2. buildSystem() — system prompt assembly
        │
-       ├─ 3. shouldCompactWithRealTokens()?
-       │     ├─ YES → fireHook("session.compacting")
-       │     │        resolveCompaction() → continue
+       ├─ 3. shouldAutoBranch()?
+       │     ├─ YES → createAutoBranch()
+       │     │        emitSessionSwitch()
+       │     │        continue (reload with lineage context)
        │     └─ NO  → proceed
        │
        ├─ 4. createAssistantMessage()
@@ -237,7 +242,7 @@ prompt(input)
        │
        └─ result?
              "continue" → next iteration (tool calls pending)
-             "compact"  → force compaction, continue
+             "branch"   → context pressure: createAutoBranch() → continue
              "stop"     → break
 ```
 
@@ -253,20 +258,20 @@ fireHook("session.idle")
 flowchart TD
     A[prompt input] --> B[create/resume session]
     B --> C[saveUserMessage + emit events]
-    C --> D[generateSessionTitle background]
+    C --> D[initSessionFromMessage + upgradeTitle]
     D --> E{abort?}
     E -->|yes| Z[emit loop-end → idle]
     E -->|no| F{step > max_steps?}
     F -->|yes| Z
     F -->|no| G[loadMessages + buildSystem]
-    G --> H{shouldCompact?}
-    H -->|yes| I[resolveCompaction → continue]
+    G --> H{shouldAutoBranch?}
+    H -->|yes| I[createAutoBranch → continue]
     H -->|no| J[createAssistantMessage]
     J --> K[resolveToolSet]
     K --> L[processStream]
     L --> M{result}
     M -->|continue| E
-    M -->|compact| I
+    M -->|branch| I
     M -->|stop| Z
 ```
 
@@ -354,7 +359,7 @@ interface ToolDef<T extends z.ZodType = z.ZodType> {
 
 ```
 bootstrap()
-  ├─ Built-in tools: read, compact, skill, question (always registered)
+  ├─ Built-in tools: read, look, skill, question, find_session (always registered)
   └─ External tools: ~/.config/quark/tools/{id}.ts
        → loadToolFiles() — dynamic import, graceful error on failure
 
@@ -368,7 +373,7 @@ resolveTools(agent.tools)
 
 ```mermaid
 flowchart TD
-    A[bootstrap] --> B[register built-ins: read, compact, skill, question]
+    A[bootstrap] --> B[register built-ins: read, look, skill, question, find_session]
     A --> C[loadToolFiles ~/.config/quark/tools]
     C --> D{valid ToolDef?}
     D -->|no| E[emit warning, skip]
@@ -462,51 +467,67 @@ flowchart TD
     I -->|correct| M[throw CorrectedError → model feedback]
 ```
 
-### 4.6 Context Compaction (`src/session/compaction.ts`, `compact-resolver.ts`)
+### 4.6 Session Branching (`src/session/branch.ts`, `branch-controller.ts`)
 
-Enables agents to survive long sessions by resetting the context budget.
+Replaces the old compaction system. When context pressure rises (token usage exceeds threshold), the session auto-branches into a child session — the parent session is frozen and a LLM summary is generated for lineage continuity.
 
-**Trigger heuristic (`shouldCompactWithRealTokens`):**
+**Trigger heuristic (`shouldAutoBranch`):**
 
 ```
 estimated_tokens >= threshold × context_window
-  where threshold = config.compact.threshold (default: 0.95)
+  where threshold = config.branching.threshold (default: 0.90)
 ```
 
-**Deduplication:** `compact-resolver.ts` holds a `Map<sessionId, pending>` — concurrent compaction requests on the same session are collapsed to one.
+The check uses real token data from the previous `step-finish` event when available, falling back to the `chars/4` heuristic.
 
-**Methods:**
+**Branching flow:**
 
-| Method | Mechanism | When |
-|---|---|---|
-| `general` | Creates a new session seeded with LLM summary + N retained turns | Default; resets token budget entirely |
-| `anchored` | Writes a summary anchor message into the current session | In-place; session ID unchanged |
+1. `shouldAutoBranch()` checks token pressure before the model call
+2. `createAutoBranch()`:
+   a. Splits conversation: recent N turns (kept) vs. old history (summarized)
+   b. If no frozen summary exists for this parent yet, generates one via LLM (`SUMMARY_PROMPT`)
+   c. Creates a child session with `parentSessionId` + `previousSessionId` lineage
+   d. Saves the frozen summary as a system message in the child
+   e. Replays recent messages + appends a steer goal
+   f. Emits `session-switch` so the TUI updates
+3. `processStream()` can also return `"branch"` on context-too-long — same flow triggered mid-response
+4. The frozen summary is shared across all sibling branches — generated once, reused forever
 
-**Trigger sources** (all flow through `resolveCompaction()`):
+**`splitMessages()`:** Strips tool/runtime parts from the conversation, then splits into "old" (summarized) and "recent" (replayed) sets based on `keepMessages`.
 
-- Auto — threshold exceeded inside `loop()`
-- Manual — `/compact` TUI command
-- Tool call — `compact` built-in tool
-- Context-too-long — provider rejected request, `loop()` forces compaction
+**`buildLineageContext()`:** Recursively walks `previousSessionId` chain, prepending each ancestor's frozen summary to form a lineage breadcrumb. This gives the model continuity awareness across multiple branches.
 
-**Plugin hook:** `session.compacting` — injected extra context strings are appended to the LLM summary prompt.
+**Key design decisions:**
+- **Frozen summaries** — once generated for a parent session, the summary is locked. All child branches share the same parent summary. No more LLM calls per branch.
+- **No in-place mutation** — the parent session's message log is never altered. Branching is fork, not mutate.
+- **Task-first** — branch summaries distill decisions, constraints, file lists, and goal state rather than raw conversation transcript.
 
 ```mermaid
 flowchart TD
-    A{trigger source} -->|auto| B[shouldCompactWithRealTokens]
-    A -->|/compact or compact tool| C[resolveCompaction]
-    A -->|context-too-long| C
+    A{context pressure} -->|auto-threshold| B[shouldAutoBranch]
+    A -->|processStream returns branch| C[createAutoBranch]
     B -->|tokens >= threshold * window| C
-    C --> D{session already pending?}
-    D -->|yes| E[collapse to existing]
-    D -->|no| F{method}
-    F -->|general| G[new session + LLM summary + N retained turns]
-    F -->|anchored| H[summary anchor in current session]
-    E --> G
-    G & H --> I[emit compaction-end]
+    C --> D{parent has frozen summary?}
+    D -->|no| E[generateSummary LLM → freeze]
+    D -->|yes| F[reuse frozen summary]
+    E --> G[createChildSession]
+    F --> G
+    G --> H[replay recent messages + steer goal]
+    H --> I[emitSessionSwitch → TUI updates]
+    I --> J[continue loop with new session]
 ```
 
-### 4.7 Provider & Model Routing (`src/provider/provider.ts`)
+### 4.6b Context Utilities (`src/session/context.ts`)
+
+**`estimateTokens(system, modelMessages)`** — chars/4 heuristic for quick token estimation.
+
+**`getContextWindow(modelLimit)`** — resolves model context window from `models.dev` cache.
+
+**`isOverContextThreshold(inputTokens, contextWindow, threshold)`** — pure percentage comparison.
+
+**`getLastInputTokens(parts)`** — reads the input token count from the most recent `step-finish` part, used to restore the token-percentage bar on session switch.
+
+### 4.7 Provider & Model Routing (`src/provider/resolver.ts`)
 
 **Routing decision tree:**
 
@@ -573,11 +594,10 @@ Drop-in TypeScript plugins with 10 typed hook points.
 | `session.created` | After session creation | — |
 | `session.idle` | After loop exits | — |
 | `session.error` | On unhandled loop error | — |
-| `session.compacting` | During compaction | `context` (extra strings) |
 | `tool.execute.before` | Before tool runs | `args` |
 | `tool.execute.after` | After tool completes | — |
 | `loop.step.before` | Start of each iteration | — |
-| `loop.step.after` | End of each iteration | — |
+| `loop.step.after` | End of each iteration | `result` (`"continue"` / `"stop"` / `"branch"`) |
 
 **Execution:** `fireHook(name, input, mutableOutput?)` runs all registered handlers sequentially. Each handler receives and returns the mutable output object.
 
@@ -648,17 +668,18 @@ Typed singleton `TypedBus` extending Node `EventEmitter`.
 | User | `user-message` |
 | Assistant | `assistant-message-start`, `assistant-message-end` |
 | Text streaming | `text-start`, `text-delta`, `text-end` |
-| Tool lifecycle | `tool-start`, `tool-input`, `tool-end` |
+| Tool lifecycle | `tool-start`, `tool-input`, `tool-running`, `tool-end` |
 | Reasoning | `reasoning-start`, `reasoning-delta`, `reasoning-end` |
 | Step | `step-start`, `step-finish` |
 | Loop | `loop-start`, `loop-end` |
-| Permission | `permission-request` |
+| Permission | `permission-request`, `permission-rejected` |
 | Question | `question-request` |
-| Compaction | `compaction-start`, `compaction-end` |
 | Retry | `retry` |
 | Error | `error`, `context-too-long` |
-| Session | `session-created`, `session-reset`, `session-switch` |
-| Sub-agent | `subagent-tool-start`, `subagent-tool-end`, `subagent-text` |
+| Session | `session-created`, `session-reset`, `session-switch`, `model-switched` |
+| Branch/Steer | `steer-start`, `steer-end` |
+| Undo | `undo-applied` |
+| Sub-agent | `subagent-tool-start`, `subagent-tool-input`, `subagent-tool-end`, `subagent-step-finish`, `subagent-text-delta`, `subagent-done` |
 
 **Safety:** Max 100 listeners per event enforced to prevent memory leaks.
 
@@ -669,7 +690,7 @@ flowchart LR
     A[agent loop] -->|emit| B[TypedBus singleton]
     C[tool system] -->|emit| B
     D[permission system] -->|emit| B
-    E[compaction] -->|emit| B
+    E[branching] -->|emit| B
     B --> F[TUI wireEvents → SolidJS store]
     B --> G[CLI structured stdout]
     B --> H[Web UI WebSocket relay]
@@ -733,7 +754,7 @@ flowchart TD
 | `reasoning` | Persist reasoning part, emit `reasoning-*` |
 | `step-finish` | Persist usage data, emit `step-finish` |
 | `finish` | Emit `assistant-message-end`, return `"stop"` or `"continue"` |
-| Context-too-long | Emit `context-too-long`, return `"compact"` |
+| Context-too-long | Emit `context-too-long`, return `"branch"` |
 
 ```mermaid
 flowchart TD
@@ -747,7 +768,7 @@ flowchart TD
     C -->|finish| I{pending tool calls?}
     I -->|yes| J[return continue]
     I -->|no| K[return stop]
-    C -->|context-too-long| L[emit context-too-long + return compact]
+    C -->|context-too-long| L[emit context-too-long + return branch]
 ```
 
 ### 4.13 Retry & Error Recovery (`src/session/retry.ts`)
@@ -815,7 +836,7 @@ App (src/tui/components/App.tsx)
 
 **Slash commands** (`src/tui/commands.ts`):
 
-`/help` `/new` `/sessions` `/compact` `/clear` `/model` `/profile` `/exit`
+`/help` `/new` `/sessions` `/clear` `/model` `/profile` `/settings` `/reload-config` `/undo` `/steer` `/goal` `/statistics` `/exit`
 
 **Key bindings:**
 
@@ -862,16 +883,19 @@ Bun HTTP + WebSocket server with React 19 SPA client.
 |---|---|---|
 | `/api/health` | GET | Liveness check |
 | `/api/sessions` | GET | List sessions |
-| `/api/prompt` | POST | Run agent loop (`{ text, images?, sessionId?, model? }`) |
+| `/api/sessions/:id/messages` | GET | Fetch session messages |
+| `/api/sessions/:id/status` | GET | Check if session is active |
+| `/api/sessions` | POST | Create a new session |
+| `/api/prompt` | POST | Run agent loop (`{ text, images?, sessionId?, context? }`) |
 | `/api/cancel` | POST | Cancel running session |
-| `/api/compact` | POST | Manual compaction |
 | `/api/model` | GET / POST | Get or set active model |
-| `/api/thinking` | POST | Toggle extended thinking |
+| `/api/thinking` | GET / POST | Get or toggle extended thinking |
 | `/api/permission` | POST | Respond to pending permission request |
 | `/api/profiles` | GET | List profiles |
 | `/api/models` | GET | List available models |
-| `/api/config` | GET | Read config |
-| `/api/files` | GET | List files for mention picker |
+| `/api/config` | GET | Read config (model, context window, max steps) |
+| `/api/files` | GET | List workspace files (fuzzy-filtered for mention picker) |
+| `/api/workspace/file` | GET / POST | Read/write workspace files |
 
 **WebSocket:** `/ws` — relays all 35+ bus events to connected clients as JSON frames in real-time.
 
@@ -971,7 +995,7 @@ Tauri 2 + React 19 desktop app. Quark core runs as a **Tauri sidecar** — a Bun
 │  │  Agent Loop ──→ emit ──→ TypedBus ──→ subscribers                 │    │
 │  │  Tool System ──→ emit       ▲  ▲        ├─ WebSocket relay        │    │
 │  │  Permission ───→ emit      │  │        ├─ Session persistence     │    │
-│  │  Compaction ───→ emit      │  │        └─ Plugins                 │    │
+│  │  Branching ────→ emit      │  │        └─ Plugins                 │    │
 │  │                             │  │                                   │    │
 │  │  Desktop never touches the bus directly — only via WebSocket      │    │
 │  └──────────────────────────────────────────────────────────────────┘    │
@@ -1095,13 +1119,10 @@ main_model: copilot/claude-sonnet-4.5
 small_model: copilot/gpt-4o-mini
 models: [gpt-4o, claude-sonnet-4.5, gemini-2.5-pro]
 max_steps: 100
-context_window: 100000
 
-compact:
+branching:
   auto: true
-  threshold: 0.95
-  retain_turns: 5
-  method: general
+  threshold: 0.90
 
 providers:
   ollama:
@@ -1176,7 +1197,7 @@ AGENTS.md                   # project root — same as .quark/AGENTS.md (either 
 
 **Entry point:** `@quark/sdk` (`src/index.ts`)
 
-### Functions
+**Functions**
 
 | Export | Source | Description |
 |---|---|---|
@@ -1184,8 +1205,9 @@ AGENTS.md                   # project root — same as .quark/AGENTS.md (either 
 | `prompt` | `session/prompt.ts` | Run the agent loop |
 | `cancel` | `session/prompt.ts` | Cancel an in-flight session |
 | `isActive` | `session/prompt.ts` | Check if a session is running |
-| `compact` | `session/compaction.ts` | Manually compact session history |
 | `createSession` / `getSession` | `session/session.ts` | Session CRUD |
+| `createTask` / `getTask` / `listTasks` / `updateTask` | `task/task.ts` | Task CRUD |
+| `createBranch` / `autoBranch` / `buildLineageContext` / `getSessionLineage` / `shouldBranchWithRealTokens` / `splitMessages` | `session/branch.ts` | Session branching API |
 | `register` / `listTools` | `tool/registry.ts` | Tool registry |
 | `defineTool` | `tool/tool.ts` | Type-safe tool factory |
 | `resolveProfile` / `listProfiles` / `readPromptFile` / `resetProfileCache` | `profile/profile.ts` | Profile system |
@@ -1249,7 +1271,7 @@ QuestionResponse
 | EPIC-03 | Tool System | FR-3 |
 | EPIC-04 | Skill System | FR-4 |
 | EPIC-05 | Permission System | FR-5 |
-| EPIC-06 | Context Compaction | FR-6 |
+| EPIC-06 | Session Branching (formerly Context Compaction) | FR-6 |
 | EPIC-07 | Provider & Model System | FR-7 |
 | EPIC-08 | Plugin System | FR-8 |
 | EPIC-09 | Sub-Agent System | FR-9 |

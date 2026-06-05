@@ -133,7 +133,7 @@ Unused field removed from interface, `toAITool()`, `resolveToolSet()`, and the
 
 ## Diagram
 
-`specs/diagrams/permission-state-machine.html` — tool call status lifecycle state machine.
+`../diagrams/permission-state-machine.html` — tool call status lifecycle state machine.
 
 ---
 

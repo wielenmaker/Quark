@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quark Message Event Flow - Replay Timeline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f5f5f5;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --soft: #7a8399;
+      --accent: #eb6c36;
+      --accent-tint: rgba(235, 108, 54, 0.08);
+      --link: #2e5aa8;
+      --rule: rgba(45, 49, 66, 0.14);
+      --white: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Geist", sans-serif;
+    }
+
+    main {
+      width: min(1160px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+      font-family: "Geist Mono", monospace;
+      font-size: 11px;
+    }
+
+    nav a {
+      color: var(--link);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(46, 90, 168, 0.35);
+    }
+
+    .eyebrow {
+      color: var(--soft);
+      font-family: "Geist Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-family: "Instrument Serif", serif;
+      font-size: clamp(40px, 6vw, 66px);
+      line-height: 0.96;
+      font-weight: 400;
+      margin: 0 0 16px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 780px;
+    }
+
+    section {
+      margin-top: 44px;
+      border-top: 1px solid var(--rule);
+      padding-top: 24px;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 20px;
+    }
+
+    .code-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+    }
+
+    .snippet {
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
+      overflow: hidden;
+    }
+
+    .snippet h3 {
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--rule);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px;
+      color: var(--ink);
+      font-family: "Geist Mono", monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      overflow: auto;
+      white-space: pre;
+    }
+
+    code {
+      font-family: "Geist Mono", monospace;
+      font-size: 0.92em;
+      color: var(--ink);
+    }
+
+    footer {
+      margin-top: 48px;
+      border-top: 1px solid var(--rule);
+      padding-top: 16px;
+      color: var(--soft);
+      font-family: "Geist Mono", monospace;
+      font-size: 10px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 840px) {
+      main {
+        width: min(100% - 28px, 1160px);
+        padding-top: 24px;
+      }
+
+      .code-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav>
+      <a href="./message-event-flow-overview.html">overview</a>
+      <a href="./message-event-flow-replay.html">replay timeline</a>
+      <a href="./message-event-flow-projections.html">projections</a>
+    </nav>
+
+    <header>
+      <div class="eyebrow">Replay timeline</div>
+      <h1>A real turn as events, snapshots, and records.</h1>
+      <p>
+        Time flows downward. Provider stream events are not stored one token at a time.
+        Quark stores part snapshots at lifecycle boundaries, then replay keeps the latest
+        snapshot for each <code>partId</code>.
+      </p>
+    </header>
+
+    <section>
+      <h2>Timeline: User Message, Tool Round, Final Answer, Summary</h2>
+      <svg viewBox="0 0 1160 1160" role="img" aria-label="Timeline of Quark events and replay">
+        <rect width="1160" height="1160" fill="#f5f5f5"/>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+          </marker>
+        </defs>
+
+        <!-- Column headers -->
+        <rect x="42" y="42" width="176" height="54" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="130" y="74" fill="#2d3142" font-family="'Geist', sans-serif" font-size="13" font-weight="600" text-anchor="middle">Trigger</text>
+
+        <rect x="284" y="42" width="176" height="54" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="372" y="74" fill="#2d3142" font-family="'Geist', sans-serif" font-size="13" font-weight="600" text-anchor="middle">Processor action</text>
+
+        <rect x="526" y="42" width="176" height="54" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text x="614" y="74" fill="#2d3142" font-family="'Geist', sans-serif" font-size="13" font-weight="600" text-anchor="middle">Persisted event</text>
+
+        <rect x="768" y="42" width="176" height="54" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="856" y="74" fill="#2d3142" font-family="'Geist', sans-serif" font-size="13" font-weight="600" text-anchor="middle">Replay projection</text>
+
+        <rect x="984" y="42" width="126" height="54" rx="8" fill="#ffffff" stroke="#2e5aa8" stroke-width="1"/>
+        <text x="1047" y="74" fill="#2d3142" font-family="'Geist', sans-serif" font-size="13" font-weight="600" text-anchor="middle">Consumer</text>
+
+        <!-- Lifelines -->
+        <line x1="130" y1="110" x2="130" y2="1088" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="372" y1="110" x2="372" y2="1088" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="614" y1="110" x2="614" y2="1088" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="856" y1="110" x2="856" y2="1088" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="1047" y1="110" x2="1047" y2="1088" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+
+        <!-- Utility: row separators -->
+        <line x1="42" y1="180" x2="1110" y2="180" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="300" x2="1110" y2="300" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="438" x2="1110" y2="438" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="570" x2="1110" y2="570" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="720" x2="1110" y2="720" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="852" x2="1110" y2="852" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+        <line x1="42" y1="972" x2="1110" y2="972" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+
+        <!-- Row 1 user -->
+        <circle cx="130" cy="148" r="5" fill="#2e5aa8"/>
+        <text x="130" y="132" fill="#2d3142" font-family="'Geist', sans-serif" font-size="12" font-weight="600" text-anchor="middle">User sends</text>
+        <text x="130" y="166" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">text + image</text>
+        <path d="M 158 148 L 344 148" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="372" y="138" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">saveUserMessage()</text>
+        <path d="M 400 148 L 586 148" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="128" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEvent u1</text>
+        <text x="614" y="146" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent text</text>
+        <text x="614" y="164" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent image</text>
+        <path d="M 642 148 L 828 148" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="138" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Message(u1)</text>
+        <text x="856" y="156" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">text + image parts</text>
+
+        <!-- Row 2 assistant envelope -->
+        <circle cx="372" cy="242" r="5" fill="#2d3142"/>
+        <text x="130" y="234" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">loop iteration 1</text>
+        <text x="372" y="230" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">createAssistantMessage()</text>
+        <path d="M 400 242 L 586 242" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="236" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEvent a1</text>
+        <path d="M 642 242 L 828 242" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="236" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Message(a1 open)</text>
+
+        <!-- Row 3 reasoning + text -->
+        <circle cx="130" cy="366" r="5" fill="#eb6c36"/>
+        <text x="130" y="348" fill="#2d3142" font-family="'Geist', sans-serif" font-size="12" font-weight="600" text-anchor="middle">Provider stream</text>
+        <text x="130" y="384" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">reasoning + text</text>
+        <path d="M 158 366 L 344 366" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="372" y="338" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">addPart(reasoning)</text>
+        <text x="372" y="356" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">updatePart(reasoning)</text>
+        <text x="372" y="374" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">addPart(text)</text>
+        <text x="372" y="392" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">updatePart(text)</text>
+        <path d="M 400 366 L 586 366" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="338" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-think ""</text>
+        <text x="614" y="356" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-think final</text>
+        <text x="614" y="374" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-text ""</text>
+        <text x="614" y="392" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-text final</text>
+        <path d="M 642 366 L 828 366" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="356" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Part(reasoning final)</text>
+        <text x="856" y="374" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Part(text final)</text>
+        <path d="M 884 366 L 1022 366" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="1047" y="356" fill="#2e5aa8" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">TUI live</text>
+        <text x="1047" y="374" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">deltas</text>
+
+        <!-- Row 4 tool -->
+        <circle cx="130" cy="504" r="5" fill="#eb6c36"/>
+        <text x="130" y="488" fill="#2d3142" font-family="'Geist', sans-serif" font-size="12" font-weight="600" text-anchor="middle">Tool use</text>
+        <text x="130" y="522" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">read source file</text>
+        <path d="M 158 504 L 344 504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="372" y="478" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">addPart(tool pending)</text>
+        <text x="372" y="496" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">updatePart(awaiting)</text>
+        <text x="372" y="514" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">run local tool</text>
+        <text x="372" y="532" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">updatePart(completed)</text>
+        <path d="M 400 504 L 586 504" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="478" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-tool pending</text>
+        <text x="614" y="496" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-tool input</text>
+        <text x="614" y="514" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent p-tool output</text>
+        <path d="M 642 504 L 828 504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="496" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Part(tool completed)</text>
+        <text x="856" y="514" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">same partId, latest wins</text>
+
+        <!-- Row 5 finish first assistant -->
+        <circle cx="372" cy="650" r="5" fill="#2d3142"/>
+        <text x="130" y="650" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">tool round closes</text>
+        <text x="372" y="632" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">addPart(step-finish)</text>
+        <text x="372" y="650" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">finishMessage(a1)</text>
+        <path d="M 400 650 L 586 650" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="632" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent step-finish</text>
+        <text x="614" y="650" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEndEvent a1</text>
+        <text x="614" y="668" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">finish = "tool-calls"</text>
+        <path d="M 642 650 L 828 650" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="642" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Message(a1 done)</text>
+        <text x="856" y="660" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">assistant + tool result</text>
+
+        <!-- Row 6 final answer -->
+        <circle cx="372" cy="792" r="5" fill="#2d3142"/>
+        <text x="130" y="792" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">loop iteration 2</text>
+        <text x="372" y="766" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">createAssistantMessage()</text>
+        <text x="372" y="784" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">addPart(text)</text>
+        <text x="372" y="802" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">finishMessage(a2)</text>
+        <path d="M 400 792 L 586 792" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="766" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEvent a2</text>
+        <text x="614" y="784" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent text final</text>
+        <text x="614" y="802" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEndEvent stop</text>
+        <path d="M 642 792 L 828 792" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="784" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Message(a2)</text>
+        <text x="856" y="802" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">final assistant text</text>
+
+        <!-- Row 7 compaction -->
+        <circle cx="372" cy="922" r="6" fill="#eb6c36"/>
+        <text x="130" y="922" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">context pressure</text>
+        <text x="372" y="896" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">create summary anchor</text>
+        <text x="372" y="914" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">providerId: compaction</text>
+        <text x="372" y="932" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">summary part</text>
+        <path d="M 400 922 L 586 922" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#arrow-accent)"/>
+        <text x="614" y="896" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEvent c1</text>
+        <text x="614" y="914" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent summary</text>
+        <text x="614" y="932" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">compactedUntilMessageId: a2</text>
+        <path d="M 642 922 L 828 922" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="856" y="914" fill="#2d3142" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">Summary anchor</text>
+        <text x="856" y="932" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">old messages skipped later</text>
+        <path d="M 884 922 L 1022 922" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="1047" y="914" fill="#2e5aa8" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">LLM context</text>
+        <text x="1047" y="932" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">summary first</text>
+
+        <!-- Callout -->
+        <rect x="100" y="1012" width="960" height="86" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.1"/>
+        <text x="126" y="1040" fill="#eb6c36" font-family="'Geist Mono', monospace" font-size="10" letter-spacing="0.12em">SNAPSHOT RULE</text>
+        <text x="126" y="1066" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600">Multiple PartEvents can have the same partId.</text>
+        <text x="416" y="1066" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10">During replay, the latest event for that partId replaces earlier snapshots.</text>
+      </svg>
+    </section>
+
+    <section>
+      <h2>Representative JSONL Lines</h2>
+      <p>
+        These snippets are simplified but keep the same shape as the code: event type, message id,
+        part id, part type, and data. The real file has one JSON object per line.
+      </p>
+
+      <div class="code-grid">
+        <article class="snippet">
+          <h3>User message with image</h3>
+          <pre>{
+  "type": "message",
+  "messageId": "u1",
+  "role": "user",
+  "modelId": null,
+  "providerId": null
+}
+{
+  "type": "part",
+  "messageId": "u1",
+  "partId": "u1-text",
+  "partType": "text",
+  "data": { "text": "Please inspect this UI bug." }
+}
+{
+  "type": "part",
+  "messageId": "u1",
+  "partId": "u1-image",
+  "partType": "image",
+  "data": { "mime": "image/png", "data": "&lt;base64-image&gt;" }
+}
+{
+  "type": "message-end",
+  "messageId": "u1",
+  "finish": "stop"
+}</pre>
+        </article>
+
+        <article class="snippet">
+          <h3>Assistant tool round</h3>
+          <pre>{
+  "type": "message",
+  "messageId": "a1",
+  "role": "assistant",
+  "modelId": "openai/gpt-5"
+}
+{
+  "type": "part",
+  "messageId": "a1",
+  "partId": "a1-tool",
+  "partType": "tool",
+  "data": {
+    "tool": "read",
+    "callId": "call-read-1",
+    "status": "pending",
+    "input": {}
+  }
+}
+{
+  "type": "part",
+  "messageId": "a1",
+  "partId": "a1-tool",
+  "partType": "tool",
+  "data": {
+    "tool": "read",
+    "callId": "call-read-1",
+    "status": "completed",
+    "input": { "filePath": "src/session/message.ts" },
+    "output": "file contents..."
+  }
+}
+{
+  "type": "message-end",
+  "messageId": "a1",
+  "finish": "tool-calls"
+}</pre>
+        </article>
+
+        <article class="snippet">
+          <h3>Final assistant answer</h3>
+          <pre>{
+  "type": "message",
+  "messageId": "a2",
+  "role": "assistant",
+  "modelId": "openai/gpt-5"
+}
+{
+  "type": "part",
+  "messageId": "a2",
+  "partId": "a2-text",
+  "partType": "text",
+  "data": {
+    "text": "The model is Message + Part. Row is legacy naming."
+  }
+}
+{
+  "type": "message-end",
+  "messageId": "a2",
+  "finish": "stop"
+}</pre>
+        </article>
+
+        <article class="snippet">
+          <h3>Compaction anchor</h3>
+          <pre>{
+  "type": "message",
+  "messageId": "c1",
+  "role": "assistant",
+  "providerId": "compaction"
+}
+{
+  "type": "part",
+  "messageId": "c1",
+  "partId": "c1-summary",
+  "partType": "summary",
+  "data": {
+    "text": "We discussed Quark's event-sourced session model...",
+    "compactedUntilMessageId": "a2"
+  }
+}
+{
+  "type": "message-end",
+  "messageId": "c1",
+  "finish": "stop"
+}</pre>
+        </article>
+      </div>
+    </section>
+
+    <footer>
+      Source touchpoints: processStream() maps provider events to addPart(), updatePart(), and finishMessage(); replayEvents() materializes records.
+    </footer>
+  </main>
+</body>
+</html>

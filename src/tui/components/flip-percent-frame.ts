@@ -6,7 +6,7 @@ export const FLIP_PERCENT_INTERVAL_MS = 70
 
 export function tokenPercentValue(used: number, limit: number): number {
   if (limit <= 0) return 0
-  return Math.round((used / limit) * 100)
+  return Math.round((used / limit) * 1000) / 10
 }
 
 export function shouldAnimateTokenPercent(from: number, to: number): boolean {
@@ -14,7 +14,7 @@ export function shouldAnimateTokenPercent(from: number, to: number): boolean {
 }
 
 export function tokenPercentText(value: number): string {
-  return `${value}%`
+  return `${value.toFixed(1)}%`
 }
 
 const TOP_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"

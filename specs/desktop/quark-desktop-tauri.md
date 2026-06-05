@@ -284,9 +284,9 @@ quark-desktop/
 - [Tauri Sidecar Guide](https://v2.tauri.app/develop/sidecar/)
 - [Bun Compile](https://bun.sh/docs/bundler/executables)
 - [CodeMirror 6](https://codemirror.net/)
-- [specs/permission-diff-preview.md](./permission-diff-preview.md) — existing
+- [specs/permission-diff-preview.md](../core/permission-diff-preview.md) — existing
   diff preview work that feeds into the desktop diff review pane
-- [specs/epics.json](./epics.json) — EPIC-17
+- [specs/epics.json](../foundation/epics.json) — EPIC-17
 - [`quark-desktop/index.html`](../quark-desktop/index.html) — existing three-pane prototype
 - [`quark-desktop/styles.css`](../quark-desktop/styles.css) — existing layout + card styles
 - [`quark-desktop/script.js`](../quark-desktop/script.js) — existing ModeSwitch + Omnibar

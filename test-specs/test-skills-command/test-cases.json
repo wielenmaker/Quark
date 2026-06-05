@@ -1,0 +1,259 @@
+[
+  {
+    "id": "tc-skills-command-registration",
+    "title": "skills command is registered in the commands array",
+    "category": "functional",
+    "subcategory": "slash command",
+    "preconditions": "commands.ts includes 'skills' entry",
+    "test_data": "{ id: 'skills', description: 'Add a skill to current profile', usage: '' }",
+    "steps": [
+      "Import commands from src/tui/commands",
+      "Find entry with id === 'skills'",
+      "Verify it exists and has correct description and usage"
+    ],
+    "expected_result": "skills command entry exists with description mentioning 'skill' and no usage hint",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": ""
+  },
+  {
+    "id": "tc-skills-filter-prefix",
+    "title": "filterCommands matches skills by prefix",
+    "category": "functional",
+    "subcategory": "slash command filtering",
+    "preconditions": "commands.ts includes 'skills' entry",
+    "test_data": "query='sk', query='ski', query='skills'",
+    "steps": [
+      "Call filterCommands('sk')",
+      "Verify results include 'skills'",
+      "Call filterCommands('ski')",
+      "Verify result is exactly 'skills'",
+      "Call filterCommands('skills')",
+      "Verify exact match returns 'skills'"
+    ],
+    "expected_result": "All prefix queries return the skills command",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "'s' prefix already matches 4 commands; adding skills makes 5"
+  },
+  {
+    "id": "tc-skills-filter-case-insensitive",
+    "title": "filterCommands is case-insensitive for skills",
+    "category": "functional",
+    "subcategory": "slash command filtering",
+    "preconditions": "commands.ts includes 'skills' entry",
+    "test_data": "query='SKILLS'",
+    "steps": [
+      "Call filterCommands('SKILLS')",
+      "Verify result includes skills command"
+    ],
+    "expected_result": "Uppercase query matches the skills command",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "medium",
+    "notes": ""
+  },
+  {
+    "id": "tc-skills-picker-mode",
+    "title": "pickerModeForCommand returns 'skills' for skills command",
+    "category": "functional",
+    "subcategory": "picker mode mapping",
+    "preconditions": "picker-items.ts has 'skills' in ChoicePickerMode and pickerModeForCommand",
+    "test_data": "commandId='skills'",
+    "steps": [
+      "Call pickerModeForCommand('skills')",
+      "Verify result is 'skills'"
+    ],
+    "expected_result": "pickerModeForCommand('skills') returns 'skills'",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": ""
+  },
+  {
+    "id": "tc-skills-discover-to-picker-options",
+    "title": "discovered skills convert to picker options",
+    "category": "functional",
+    "subcategory": "skill discovery",
+    "preconditions": "SKILL.md files exist in test directory with frontmatter name and description",
+    "test_data": "Two skills: 'alpha' with description 'Alpha skill', 'beta' with description 'Beta skill'",
+    "steps": [
+      "Create temp directory with two SKILL.md files",
+      "Call discoverSkills([tmpDir])",
+      "Map results to PickerOption[] format {id, name}",
+      "Verify each skill has id === name and name is the skill name"
+    ],
+    "expected_result": "Two PickerOptions with ids 'alpha' and 'beta'",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "The handleGetSkills function in index.tsx will do this mapping"
+  },
+  {
+    "id": "tc-skills-build-picker-items",
+    "title": "buildPickerItems works with skill options",
+    "category": "functional",
+    "subcategory": "picker items",
+    "preconditions": "Skill PickerOption[] available",
+    "test_data": "Two skill options: alpha, beta. Current skills: ['alpha']",
+    "steps": [
+      "Call buildPickerItems with skill options and empty currentId",
+      "Verify all skills appear as picker entries",
+      "Verify items have id, label, detail fields"
+    ],
+    "expected_result": "All skill options appear as picker entries with correct fields",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "medium",
+    "notes": "Since multiple skills can be 'current', a single currentId won't mark all bound skills"
+  },
+  {
+    "id": "tc-skills-add-to-agent-skills",
+    "title": "Adding a skill name to activeAgent.skills array",
+    "category": "functional",
+    "subcategory": "agent configuration",
+    "preconditions": "activeAgent has skills: ['code-review']",
+    "test_data": "new skill: 'git-release'",
+    "steps": [
+      "Create agent config with skills: ['code-review']",
+      "Append 'git-release' to agent.skills array",
+      "Verify agent.skills is now ['code-review', 'git-release']"
+    ],
+    "expected_result": "New skill is appended to the skills array",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "This is an in-memory mutation, not persisted to disk"
+  },
+  {
+    "id": "tc-skills-system-prompt-update",
+    "title": "buildSystem reflects newly added skill's L1 metadata",
+    "category": "integration",
+    "subcategory": "system prompt",
+    "preconditions": "SKILL.md files created with L1 metadata. skill name added to agent.skills",
+    "test_data": "Skill 'git-release' with description 'Manage git releases'",
+    "steps": [
+      "Create skill file for 'git-release' with description 'Manage git releases'",
+      "Call discoverSkills([tmpDir])",
+      "Create agent with skills: ['git-release']",
+      "Call buildSystem(agent)",
+      "Verify system prompt includes '# Available Skills'",
+      "Verify system prompt includes 'git-release' and 'Manage git releases'",
+      "Verify L2 content (skill body) is NOT in system prompt"
+    ],
+    "expected_result": "System prompt includes L1 metadata for git-release but not L2 body content",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "This verifies the core feature: adding skill → system prompt update"
+  },
+  {
+    "id": "tc-skills-duplicate-detection",
+    "title": "Adding an already-bound skill is detected and skipped",
+    "category": "functional",
+    "subcategory": "duplicate detection",
+    "preconditions": "activeAgent.skills already contains 'code-review'",
+    "test_data": "skill name: 'code-review' (already bound)",
+    "steps": [
+      "Create agent with skills: ['code-review']",
+      "Check if 'code-review' is already in agent.skills",
+      "Verify the check returns true",
+      "In the command handler, do NOT add duplicate skill"
+    ],
+    "expected_result": "Duplicate is detected; skill is not added again; info toast is shown instead",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "Duplicate detection should be a simple array check"
+  },
+  {
+    "id": "tc-skills-skill-tool-reregister",
+    "title": "buildSkillTool reflects expanded boundSkills after adding skill",
+    "category": "integration",
+    "subcategory": "skill tool",
+    "preconditions": "Two SKILL.md files created. Initially only one is bound.",
+    "test_data": "Skills: alpha (bound), beta (added later)",
+    "steps": [
+      "Create skill files for 'alpha' and 'beta'",
+      "Call discoverSkills([tmpDir])",
+      "Build skill tool with boundSkills: ['alpha']",
+      "Verify tool description includes 'alpha' but NOT 'beta'",
+      "Build skill tool with boundSkills: ['alpha', 'beta']",
+      "Verify tool description now includes BOTH 'alpha' and 'beta'"
+    ],
+    "expected_result": "Tool description updates to include newly added skill",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "high",
+    "notes": "This is what happens when the skill tool is re-registered after /skills adds a skill"
+  },
+  {
+    "id": "tc-skills-empty-discovered",
+    "title": "Handle case when no skills are discovered",
+    "category": "functional",
+    "subcategory": "edge case",
+    "preconditions": "No SKILL.md files in search directories",
+    "test_data": "Empty temp directory",
+    "steps": [
+      "Call discoverSkills with empty directory",
+      "Verify result is empty array",
+      "Map to PickerOption[] — should also be empty",
+      "buildPickerItems with empty options should return empty array"
+    ],
+    "expected_result": "Empty picker items when no skills exist",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "medium",
+    "notes": "The picker should show 'No skills available' message"
+  },
+  {
+    "id": "tc-skills-filter-picker-by-query",
+    "title": "Filter skill picker items by query",
+    "category": "functional",
+    "subcategory": "picker filtering",
+    "preconditions": "Multiple skills discovered",
+    "test_data": "Skills: 'academic-research', 'code-review', 'git-release'. Query: 'code'",
+    "steps": [
+      "Build picker items from skill options",
+      "Pass query='code'",
+      "Verify only 'code-review' appears in results"
+    ],
+    "expected_result": "Query 'code' filters to only 'code-review'",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "medium",
+    "notes": "buildPickerItems already supports query filtering by id or name"
+  },
+  {
+    "id": "tc-skills-profile-skills-empty-after-switch",
+    "title": "Switching profiles resets skills to new profile's defaults",
+    "category": "functional",
+    "subcategory": "profile switching",
+    "preconditions": "/skills was used to add skill X to profile A",
+    "test_data": "Switch from profile A (with added skill) to profile B",
+    "steps": [
+      "Verify that skills added via /skills are NOT persisted across profile switches",
+      "After switching profiles, agent.skills should match only the new profile's declared skills"
+    ],
+    "expected_result": "Temporary skills are cleared on profile switch",
+    "actual_result": "",
+    "status": "not_run",
+    "evidence": "",
+    "priority": "low",
+    "notes": "This is an in-memory-only feature — profile switch resets via agentFromProfile"
+  }
+]

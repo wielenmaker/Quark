@@ -2,7 +2,7 @@
 //
 // Searches two locations:
 // 1. .quark/skills/*/SKILL.md  (project-level)
-// 2. ~/.quark/skills/*/SKILL.md (global)
+// 2. ~/.config/quark/skills/*/SKILL.md (global)
 //
 // SKILL.md format:
 // ---
@@ -92,8 +92,8 @@ export function discoverSkills(dirs?: string[]): Skill[] {
   if (cache) return cache
 
   const searchDirs = dirs ?? [
-    path.resolve(process.cwd(), ".quark", "skills"),
     path.join(os.homedir(), ".config", "quark", "skills"),
+    path.resolve(process.cwd(), ".quark", "skills"),
   ]
 
   const seen = new Map<string, Skill>()

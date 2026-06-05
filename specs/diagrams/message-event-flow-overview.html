@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quark Message Event Flow - Overview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f5f5f5;
+      --paper-2: #ececec;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --soft: #7a8399;
+      --accent: #eb6c36;
+      --accent-tint: rgba(235, 108, 54, 0.08);
+      --link: #2e5aa8;
+      --rule: rgba(45, 49, 66, 0.14);
+      --white: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Geist", sans-serif;
+    }
+
+    main {
+      width: min(1120px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+      font-family: "Geist Mono", monospace;
+      font-size: 11px;
+    }
+
+    nav a {
+      color: var(--link);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(46, 90, 168, 0.35);
+    }
+
+    .eyebrow {
+      color: var(--soft);
+      font-family: "Geist Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-family: "Instrument Serif", serif;
+      font-size: clamp(40px, 6vw, 68px);
+      line-height: 0.95;
+      font-weight: 400;
+      margin: 0 0 16px;
+      letter-spacing: 0;
+    }
+
+    .intro {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.55;
+      margin: 0 0 36px;
+    }
+
+    section {
+      margin-top: 44px;
+      border-top: 1px solid var(--rule);
+      padding-top: 24px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 780px;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 20px;
+    }
+
+    .note-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .note {
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.46);
+    }
+
+    .note strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .note span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    code {
+      font-family: "Geist Mono", monospace;
+      font-size: 0.92em;
+      color: var(--ink);
+    }
+
+    footer {
+      margin-top: 48px;
+      border-top: 1px solid var(--rule);
+      padding-top: 16px;
+      color: var(--soft);
+      font-family: "Geist Mono", monospace;
+      font-size: 10px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 28px, 1120px);
+        padding-top: 24px;
+      }
+
+      .note-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav>
+      <a href="./message-event-flow-overview.html">overview</a>
+      <a href="./message-event-flow-replay.html">replay timeline</a>
+      <a href="./message-event-flow-projections.html">projections</a>
+    </nav>
+
+    <header>
+      <div class="eyebrow">Quark session model</div>
+      <h1>Events are the source. Messages are the projection.</h1>
+      <p class="intro">
+        This view separates the durable event log from the working objects used by the app.
+        User input and provider streams both become session events. Replay turns those events
+        into message and part records, then adapters reshape them for the model and UI.
+      </p>
+    </header>
+
+    <section>
+      <h2>One Concrete Turn</h2>
+      <p>
+        The example below uses one user prompt with an image, one assistant tool round, one
+        final answer, and one compaction summary. The same durable log feeds every later view.
+      </p>
+
+      <svg viewBox="0 0 1120 760" role="img" aria-label="Overview of Quark message event flow">
+        <rect width="1120" height="760" fill="#f5f5f5"/>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+          </marker>
+        </defs>
+
+        <!-- Primary flow arrows -->
+        <path d="M 198 154 L 306 154" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#arrow)"/>
+        <path d="M 486 154 L 596 154" stroke="#eb6c36" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+        <path d="M 784 154 L 896 154" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#arrow)"/>
+        <path d="M 684 250 C 684 304, 456 304, 456 358" stroke="#2e5aa8" stroke-width="1.4" marker-end="url(#arrow-link)"/>
+        <path d="M 456 466 C 456 530, 684 530, 684 594" stroke="#4f5d75" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <path d="M 784 644 L 896 644" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+        <!-- User input -->
+        <rect x="46" y="88" width="152" height="132" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+        <rect x="62" y="104" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="82" y="116" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">USER</text>
+        <text x="122" y="149" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">Prompt + Image</text>
+        <text x="122" y="171" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">"inspect this bug"</text>
+        <rect x="80" y="184" width="84" height="20" rx="4" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8" stroke-width="0.8"/>
+        <text x="122" y="198" fill="#2e5aa8" font-family="'Geist Mono', monospace" font-size="9" text-anchor="middle">image/png</text>
+
+        <!-- saveUserMessage -->
+        <rect x="306" y="88" width="180" height="132" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+        <rect x="322" y="104" width="44" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="344" y="116" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">WRITE</text>
+        <text x="396" y="148" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">saveUserMessage()</text>
+        <text x="396" y="173" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageEvent</text>
+        <text x="396" y="190" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent(text)</text>
+        <text x="396" y="207" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartEvent(image)</text>
+
+        <!-- Session log -->
+        <rect x="596" y="76" width="188" height="174" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+        <rect x="612" y="92" width="38" height="16" rx="2" fill="#f5f5f5" stroke="rgba(235,108,54,0.5)" stroke-width="0.8"/>
+        <text x="631" y="104" fill="#eb6c36" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">LOG</text>
+        <text x="690" y="132" fill="#2d3142" font-family="'Geist', sans-serif" font-size="15" font-weight="600" text-anchor="middle">session.jsonl</text>
+        <text x="690" y="159" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">append-only events</text>
+        <text x="690" y="181" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">message / part / end</text>
+        <text x="690" y="203" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">part snapshots</text>
+        <text x="690" y="225" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">compaction anchors</text>
+
+        <!-- Replay -->
+        <rect x="896" y="88" width="178" height="132" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+        <rect x="912" y="104" width="50" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="937" y="116" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">REPLAY</text>
+        <text x="985" y="148" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">Records in memory</text>
+        <text x="985" y="174" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">MessageRecord[]</text>
+        <text x="985" y="193" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">PartRecord[]</text>
+
+        <!-- Provider stream lane -->
+        <rect x="286" y="358" width="340" height="108" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+        <rect x="302" y="374" width="58" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="331" y="386" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">PROVIDER</text>
+        <text x="456" y="400" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">Assistant stream events</text>
+        <text x="456" y="425" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">reasoning-start / text-start / tool-call / finish-step</text>
+        <text x="456" y="446" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">deltas update UI live; final snapshots go to JSONL</text>
+
+        <!-- Projection consumers -->
+        <rect x="596" y="594" width="188" height="112" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+        <rect x="612" y="610" width="62" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="643" y="622" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">ADAPTERS</text>
+        <text x="690" y="650" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">Consumer formats</text>
+        <text x="690" y="676" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">toModelMessages()</text>
+        <text x="690" y="694" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">dbToTuiMessages()</text>
+
+        <rect x="896" y="594" width="178" height="112" rx="8" fill="#ffffff" stroke="#2e5aa8" stroke-width="1.2"/>
+        <rect x="912" y="610" width="38" height="16" rx="2" fill="#f5f5f5" stroke="rgba(46,90,168,0.42)" stroke-width="0.8"/>
+        <text x="931" y="622" fill="#2e5aa8" font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle">VIEWS</text>
+        <text x="985" y="650" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600" text-anchor="middle">LLM + UI</text>
+        <text x="985" y="676" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">ModelMessage[]</text>
+        <text x="985" y="694" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10" text-anchor="middle">TuiMessage[]</text>
+
+        <!-- Compaction callout -->
+        <rect x="46" y="578" width="364" height="128" rx="8" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.24)" stroke-width="1.1" stroke-dasharray="5,4"/>
+        <text x="70" y="608" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9" letter-spacing="0.12em">COMPACTION SUMMARY</text>
+        <text x="70" y="638" fill="#2d3142" font-family="'Geist', sans-serif" font-size="14" font-weight="600">providerId = "compaction"</text>
+        <text x="70" y="664" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10">PartEvent(summary: { text, compactedUntilMessageId })</text>
+        <text x="70" y="688" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="10">toModelMessages() injects it as first user message</text>
+        <path d="M 410 642 L 596 642" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+
+        <!-- Bottom legend -->
+        <line x1="46" y1="738" x2="1074" y2="738" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+        <rect x="46" y="720" width="10" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36"/>
+        <text x="66" y="729" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9">durable source of truth</text>
+        <rect x="230" y="720" width="10" height="10" rx="2" fill="#ffffff" stroke="#2d3142"/>
+        <text x="250" y="729" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9">in-memory projection or code path</text>
+        <rect x="496" y="720" width="10" height="10" rx="2" fill="#ffffff" stroke="#2e5aa8"/>
+        <text x="516" y="729" fill="#4f5d75" font-family="'Geist Mono', monospace" font-size="9">consumer-specific view</text>
+      </svg>
+
+      <div class="note-grid">
+        <div class="note">
+          <strong>User input path</strong>
+          <span>The user prompt and image do not come from a provider. Quark writes them directly through <code>saveUserMessage()</code>.</span>
+        </div>
+        <div class="note">
+          <strong>Assistant path</strong>
+          <span>Provider stream events are interpreted by <code>processStream()</code>, then persisted as message, part, and message-end events.</span>
+        </div>
+        <div class="note">
+          <strong>Replay path</strong>
+          <span><code>MessageRow</code> and <code>PartRow</code> are not disk records. They are memory projections built from the event log.</span>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Source touchpoints: src/session/message.ts, src/session/processor.ts, src/storage/session-format.ts, src/storage/session-jsonl.ts.
+    </footer>
+  </main>
+</body>
+</html>

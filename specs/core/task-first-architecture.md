@@ -423,7 +423,7 @@ branching:
 | `src/tool/steer.ts` | REMOVED — steer is a TUI command, not an agent tool |
 | `src/tool/find_session.ts` | `find_session` tool |
 | `src/tool/read_session.ts` | `read_session` tool |
-| `specs/task-first-architecture.md` | This spec |
+| `task-first-architecture.md` | This spec |
 
 ## 14. Files to Modify
 
