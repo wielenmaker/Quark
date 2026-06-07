@@ -862,5 +862,21 @@
     "profile": "coder",
     "timeCreated": 1780601907079,
     "timeUpdated": 1780601907079
+  },
+  {
+    "id": "task_NeuSEzZF1i0TbFtG",
+    "title": "<file path=\"specs/core/delegate-tool-migration.md\">",
+    "description": "<file path=\"specs/core/delegate-tool-migration.md\">",
+    "profile": "coder",
+    "timeCreated": 1780825985485,
+    "timeUpdated": 1780825985485
+  },
+  {
+    "id": "task_3f7cZgYijZPLsfSp",
+    "title": "understand the current git tree",
+    "description": "understand the current git tree",
+    "profile": "coder",
+    "timeCreated": 1780826086746,
+    "timeUpdated": 1780826086746
   }
 ]
