@@ -2,13 +2,15 @@
 title: ChatGPT Consumer API Provider (Codex Streaming)
 date_created: 2026-06-06
 date_modified: 2026-06-07
-revision: 5
+revision: 7
 history:
   - 2026-06-06: Initial draft
   - 2026-06-06: Verified against real API — model is gpt-5.5, not gpt-4o/o3/o4
   - 2026-06-07: Fixed tool mapping to use Responses API flat format (tools[].name instead of tools[].function.name)
   - 2026-06-07: Real API and TUI tests fixed stream lifecycles and multi-turn tool-result replay
   - 2026-06-07: Documented final implementation, boundary fixes, and verification results
+  - 2026-06-07: Isolated token persistence tests from the real user credential file
+  - 2026-06-07: Completed token isolation fix and verified the TUI authentication boundary
 status: done
 ---
 
@@ -37,6 +39,10 @@ src/provider/
 
 ### Layer 1: Auth (reuse)
 `codex-auth.ts` provides `loadToken()`, `refreshToken()`. The provider extracts `accountId` from the JWT payload claim `https://api.openai.com/auth.chatgpt_account_id`.
+
+Token persistence defaults to `~/.config/quark/codex-token.json`. Tests must
+use an explicit temporary path or `QUARK_CODEX_TOKEN_FILE`; they must never
+write or delete the default user credential file.
 
 ### Layer 2: Provider factory (`codex-consumer.ts`)
 Implements `LanguageModelV3`:
@@ -99,6 +105,7 @@ Exponential backoff for 429, 500, 502, 503, 504. Max retries are configurable an
 8. All existing provider tests continue to pass
 9. Assistant history and tool results are accepted on subsequent API turns
 10. A TUI tool call executes and the final assistant response is persisted
+11. Provider tests do not modify or delete the user's persisted Codex token
 
 ## Testing Strategy
 
@@ -119,3 +126,5 @@ Exponential backoff for 429, 500, 502, 503, 504. Max retries are configurable an
 - TUI executed `read(package.json)`, replayed the tool result, and returned `@quark/sdk`
 - Provider suite: 194 passed, 5 skipped, 0 failed
 - TypeScript typecheck passed
+- Provider suite left a sentinel token file byte-for-byte unchanged
+- TUI loaded an isolated token and reached the API authentication boundary

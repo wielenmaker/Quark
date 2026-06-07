@@ -864,7 +864,6 @@
     "timeUpdated": 1780601907079
   },
   {
-
     "id": "task_kVZes6JcHXvyjzZh",
     "title": "hello, explore the codebase",
     "description": "hello, explore the codebase",
@@ -1735,5 +1734,37 @@
     "profile": "coder",
     "timeCreated": 1780816624628,
     "timeUpdated": 1780816629289
+  },
+  {
+    "id": "task_uoPiKRIeQmCks26a",
+    "title": "Plan and implement the worktree feature to clone the current project into a new worktree at `.quark/<name>`.",
+    "description": "Plan and implement the worktree feature to clone the current project into a new worktree at `.quark/<name>`.",
+    "profile": "coder",
+    "timeCreated": 1780817543904,
+    "timeUpdated": 1780817557908
+  },
+  {
+    "id": "task_7zEwDKsFoxfcuH3t",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1780818669552,
+    "timeUpdated": 1780818669552
+  },
+  {
+    "id": "task_cYkCwUslVxYwwuJF",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1780818669555,
+    "timeUpdated": 1780818669555
+  },
+  {
+    "id": "task_N0EIuwZ2qv1gJsYq",
+    "title": "reply with ok",
+    "description": "reply with ok",
+    "profile": "coder",
+    "timeCreated": 1780818724188,
+    "timeUpdated": 1780818724188
   }
 ]

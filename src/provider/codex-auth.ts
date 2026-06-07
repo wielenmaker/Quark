@@ -30,8 +30,7 @@ const DEVICE_CODE_TIMEOUT_SECONDS = 15 * 60
 const SCOPE = "openid profile email offline_access"
 const JWT_CLAIM_PATH = "https://api.openai.com/auth"
 
-const TOKEN_DIR = path.join(os.homedir(), ".config", "quark")
-const TOKEN_FILE = path.join(TOKEN_DIR, "codex-token.json")
+const TOKEN_FILE_NAME = "codex-token.json"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -648,21 +647,26 @@ export async function loginWithBrowser(options: {
 // Persistence
 // ---------------------------------------------------------------------------
 
-export function saveToken(token: CodexToken): void {
-	fs.mkdirSync(TOKEN_DIR, { recursive: true })
-	const tmpFile = `${TOKEN_FILE}.tmp.${Date.now()}`
-	fs.writeFileSync(tmpFile, JSON.stringify({ ...token, savedAt: Date.now() }), "utf-8")
-	fs.renameSync(tmpFile, TOKEN_FILE)
+function getTokenFile(): string {
+	return process.env.QUARK_CODEX_TOKEN_FILE?.trim()
+		|| path.join(os.homedir(), ".config", "quark", TOKEN_FILE_NAME)
 }
 
-export function loadToken(): CodexToken | null {
+export function saveToken(token: CodexToken, tokenFile = getTokenFile()): void {
+	fs.mkdirSync(path.dirname(tokenFile), { recursive: true })
+	const tmpFile = `${tokenFile}.tmp.${Date.now()}`
+	fs.writeFileSync(tmpFile, JSON.stringify({ ...token, savedAt: Date.now() }), "utf-8")
+	fs.renameSync(tmpFile, tokenFile)
+}
+
+export function loadToken(tokenFile = getTokenFile()): CodexToken | null {
 	// Retry for transient read errors (file being written by another process).
 	// We only retry on errors that could be temporary (empty file, JSON parse
 	// error, truncated read). ENOENT (file not found) is not retried.
 	let lastError: unknown
 	for (let attempt = 0; attempt < 3; attempt++) {
 		try {
-			const raw = fs.readFileSync(TOKEN_FILE, "utf-8")
+			const raw = fs.readFileSync(tokenFile, "utf-8")
 			if (raw.length === 0) {
 				lastError = new Error("Token file is empty")
 				if (attempt < 2) continue
@@ -698,5 +702,4 @@ export function loadToken(): CodexToken | null {
 	}
 	return null
 }
-
 

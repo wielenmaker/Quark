@@ -4,11 +4,9 @@
 // OpenAI Codex provider with proper token loading and error handling.
 //
 // TARGET SOURCE: src/provider/resolver.ts (MODIFICATION — codex branch)
-// STATUS: The resolver.ts file EXISTS but the "codex" branch DOES NOT.
-//         These tests will FAIL because resolveModel doesn't yet handle "codex".
 //
 // Pattern: Integration-style tests that interact with the real resolver
-// and token file persistence. Token file is written/cleaned up per test.
+// and isolated token file persistence.
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import * as fs from "fs"
@@ -17,10 +15,11 @@ import * as os from "os"
 import { resolveModel } from "../../src/provider/resolver"
 
 // ---------------------------------------------------------------------------
-// Token file helpers — same conventions as copilot-auth.ts
+// Token file helpers
 // ---------------------------------------------------------------------------
-const TOKEN_DIR = path.join(os.homedir(), ".config", "quark")
-const TOKEN_FILE = path.join(TOKEN_DIR, "codex-token.json")
+let tokenDir = ""
+let tokenFile = ""
+let previousTokenFile: string | undefined
 
 interface CodexToken {
   access: string
@@ -29,19 +28,9 @@ interface CodexToken {
   accountId: string
 }
 
-/** Write a CodexToken to the standard location. */
+/** Write a CodexToken to the isolated test location. */
 function writeTokenFile(token: CodexToken): void {
-  fs.mkdirSync(TOKEN_DIR, { recursive: true })
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify(token), "utf-8")
-}
-
-/** Remove the token file if it exists. */
-function deleteTokenFile(): void {
-  try {
-    fs.unlinkSync(TOKEN_FILE)
-  } catch {
-    // File doesn't exist — fine
-  }
+  fs.writeFileSync(tokenFile, JSON.stringify(token), "utf-8")
 }
 
 /** A JWT-like access token that encodes a known accountId. */
@@ -87,12 +76,20 @@ function expiredToken(): CodexToken {
 // resolveModel — codex provider routing
 // ---------------------------------------------------------------------------
 describe("resolveModel(codex/...)", () => {
-  // Clean up before and after each test
   beforeEach(() => {
-    deleteTokenFile()
+    tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), "quark-codex-resolver-"))
+    tokenFile = path.join(tokenDir, "codex-token.json")
+    previousTokenFile = process.env.QUARK_CODEX_TOKEN_FILE
+    process.env.QUARK_CODEX_TOKEN_FILE = tokenFile
   })
+
   afterEach(() => {
-    deleteTokenFile()
+    if (previousTokenFile === undefined) {
+      delete process.env.QUARK_CODEX_TOKEN_FILE
+    } else {
+      process.env.QUARK_CODEX_TOKEN_FILE = previousTokenFile
+    }
+    fs.rmSync(tokenDir, { recursive: true, force: true })
   })
 
   test("returns a configured model when codex token is present", async () => {
