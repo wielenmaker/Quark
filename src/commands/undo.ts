@@ -15,6 +15,7 @@ import { mkdir, cp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname, relative, isAbsolute } from "node:path";
 import { getSessionStorageRoot } from "../storage/session-path";
+import { rewriteJSONL } from "../storage/session-jsonl";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -202,13 +203,15 @@ export async function preTurnSnapshot(
   messageId: string,
 ): Promise<void> {
   const tracker = loadTracker(sessionId);
-  if (tracker.turns.length === 0) return;
+  // Need at least 2 turns: the current turn (created by setCurrentTurn)
+  // and the completed previous turn to snapshot from.
+  if (tracker.turns.length < 2) return;
 
-  const lastTurn = tracker.turns[tracker.turns.length - 1];
-  if (!lastTurn || lastTurn.files.length === 0) return;
+  const previousTurn = tracker.turns[tracker.turns.length - 2];
+  if (!previousTurn || previousTurn.files.length === 0) return;
 
-  // Snapshot files from the last turn under the new turn's messageId
-  for (const relPath of lastTurn.files) {
+  // Snapshot files from the previous turn under the new turn's messageId
+  for (const relPath of previousTurn.files) {
     if (!snapshottedThisTurn.has(relPath)) {
       snapshottedThisTurn.add(relPath);
       await snapshotFile(sessionId, messageId, relPath);
@@ -223,10 +226,23 @@ export async function preTurnSnapshot(
 /**
  * Set the current turn's user message ID.
  * Called at the start of prompt(), after saving the user message.
+ *
+ * Creates a TurnEntry in the tracker so /undo works even when no files
+ * are modified during the turn.
  */
-export function setCurrentTurn(messageId: string): void {
+export function setCurrentTurn(sessionId: string, messageId: string): void {
   currentTurnMsgId = messageId;
   snapshottedThisTurn.clear();
+
+  // Ensure a TurnEntry exists for every turn (even zero-file turns)
+  const tracker = loadTracker(sessionId);
+  if (!tracker.turns.some((t) => t.messageId === messageId)) {
+    tracker.turns.push({ messageId, files: [] });
+    saveTracker(sessionId, tracker).catch(() => {
+      // Best-effort — if the write fails, /undo still works from the
+      // in-memory cache this session lifetime.
+    });
+  }
 }
 
 /**
@@ -314,6 +330,10 @@ export async function undoLatest(
   if (!lastTurn) return null;
 
   const result = await restoreFromSnapshot(sessionId, lastTurn.messageId);
+
+  // Strip the undone turn from the durable JSONL log so the next model call
+  // no longer sees the messages or tool results from this turn.
+  rewriteJSONL(sessionId, lastTurn.messageId);
 
   // Remove from tracker
   tracker.turns.pop();

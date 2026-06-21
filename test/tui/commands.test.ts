@@ -10,7 +10,8 @@ describe("filterCommands", () => {
   })
 
   test("returns all commands when query is empty with default limit", () => {
-    const result = filterCommands("", 15)
+    // The default cap is 30; with ≤30 commands this returns the full list.
+    const result = filterCommands("")
     expect(result.length).toBe(commands.length)
   })
 

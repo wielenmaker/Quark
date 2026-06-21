@@ -4,10 +4,10 @@
 // in a real filesystem with temp directories.
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
-import { setSessionStorageRoot } from "../../src/storage/session-path";
+import { setSessionStorageRoot, getSessionStorageRoot } from "../../src/storage/session-path";
 import {
   setCurrentTurn,
   preTurnSnapshot,
@@ -90,7 +90,7 @@ describe("undo flow", () => {
   test("snapshot, modify, undo restores file content", async () => {
     createFile("src/app.ts", "original content");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "src/app.ts");
     await takeSnapshot(sessionId, turn1Id, ["src/app.ts"]);
 
@@ -107,7 +107,7 @@ describe("undo flow", () => {
 
   test("undo deletes files created during the turn", async () => {
     // File doesn't exist before turn — write tool creates it
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "new-file.md");
     // No snapshot taken (file didn't exist yet)
 
@@ -127,7 +127,7 @@ describe("undo flow", () => {
     createFile("b.ts", "b-original");
     createFile("c.ts", "c-original");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
 
     // Track and snapshot a.ts and b.ts (agent modifies these)
     await trackFile(sessionId, "a.ts");
@@ -152,7 +152,7 @@ describe("undo flow", () => {
   test("undo handles files in subdirectories", async () => {
     createFile("src/utils/helper.ts", "original helper");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "src/utils/helper.ts");
     await takeSnapshot(sessionId, turn1Id, ["src/utils/helper.ts"]);
 
@@ -175,13 +175,13 @@ describe("chained undo", () => {
     createFile("shared.ts", "version-0");
 
     // Turn 1: modify shared.ts
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "shared.ts");
     await takeSnapshot(sessionId, turn1Id, ["shared.ts"]);
     writeFileSync(join(workspace, "shared.ts"), "version-1");
 
     // Turn 2: modify shared.ts again + create new file
-    setCurrentTurn(turn2Id);
+    setCurrentTurn(sessionId, turn2Id);
     await trackFile(sessionId, "shared.ts");
     await trackFile(sessionId, "new.ts");
     await takeSnapshot(sessionId, turn2Id, ["shared.ts"]); // shared.ts only — new.ts is new
@@ -216,7 +216,7 @@ describe("toolPreExecute", () => {
   test("snapshots and tracks a file lazily", async () => {
     createFile("lazy.ts", "lazy-original");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await toolPreExecute(sessionId, join(workspace, "lazy.ts"));
 
     // Modify the file
@@ -230,18 +230,22 @@ describe("toolPreExecute", () => {
   });
 
   test("skips files outside workspace", async () => {
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await toolPreExecute(sessionId, "/etc/passwd");
 
-    // Should not track or snapshot anything
+    // Should not track or snapshot anything — but the turn still exists
+    // (zero files), so undo succeeds with no files to restore
     const result = await undoLatest(sessionId);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.restored).toEqual([]);
+    expect(result!.deleted).toEqual([]);
+    expect(result!.messageId).toBe(turn1Id);
   });
 
   test("only snapshots a file once per turn", async () => {
     createFile("multi.ts", "multi-original");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
 
     // First modification: snapshot should happen
     await toolPreExecute(sessionId, join(workspace, "multi.ts"));
@@ -267,13 +271,13 @@ describe("preTurnSnapshot", () => {
     createFile("proactive.ts", "proactive-original");
 
     // Turn 1: track and modify the file
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "proactive.ts");
     await takeSnapshot(sessionId, turn1Id, ["proactive.ts"]);
     writeFileSync(join(workspace, "proactive.ts"), "proactive-v1");
 
     // Turn 2: proactive snapshot of files from turn 1
-    setCurrentTurn(turn2Id);
+    setCurrentTurn(sessionId, turn2Id);
     await preTurnSnapshot(sessionId, turn2Id);
 
     // Now modify in turn 2
@@ -289,6 +293,95 @@ describe("preTurnSnapshot", () => {
 });
 
 // ---------------------------------------------------------------------------
+// JSONL rewrite on undo
+// ---------------------------------------------------------------------------
+
+function writeSessionJSONL(sessionId: string, lines: string[]): void {
+  const dir = join(getSessionStorageRoot(), sessionId);
+  mkdirSync(dir, { recursive: true });
+  const logPath = join(dir, "session.jsonl");
+  writeFileSync(logPath, lines.join("\n") + "\n");
+}
+
+function readSessionJSONL(sessionId: string): string[] {
+  const logPath = join(getSessionStorageRoot(), sessionId, "session.jsonl");
+  if (!existsSync(logPath)) return [];
+  return readFileSync(logPath, "utf-8")
+    .split("\n")
+    .filter((line) => line.trim());
+}
+
+describe("JSONL rewrite on undo", () => {
+  test("undo truncates the undone turn from session.jsonl", async () => {
+    createFile("jsonl-undo.ts", "original");
+
+    writeSessionJSONL(sessionId, [
+      JSON.stringify({ v: 1, ts: 1, sessionId, type: "session", session: { id: sessionId, title: null, directory: workspace, parentSessionId: null, kind: "main", taskId: null, summary: null, parentSummary: null, filesModified: null, timeCreated: 1, timeUpdated: 1 } }),
+      JSON.stringify({ v: 1, ts: 2, sessionId, type: "message", messageId: turn1Id, role: "user", modelId: null, providerId: null, timeCreated: 2 }),
+      JSON.stringify({ v: 1, ts: 3, sessionId, type: "part", messageId: turn1Id, partId: "part-user-1", partType: "text", data: { text: "hello" } }),
+      JSON.stringify({ v: 1, ts: 4, sessionId, type: "message-end", messageId: turn1Id, finish: "stop", cost: null, tokensIn: null, tokensOut: null, timeCompleted: 4 }),
+      JSON.stringify({ v: 1, ts: 5, sessionId, type: "message", messageId: "assistant-1", role: "assistant", modelId: "test/model", providerId: "test", timeCreated: 5 }),
+      JSON.stringify({ v: 1, ts: 6, sessionId, type: "part", messageId: "assistant-1", partId: "part-assistant-1", partType: "text", data: { text: "hi" } }),
+      JSON.stringify({ v: 1, ts: 7, sessionId, type: "message-end", messageId: "assistant-1", finish: "stop", cost: null, tokensIn: null, tokensOut: null, timeCompleted: 7 }),
+    ]);
+
+    setCurrentTurn(sessionId, turn1Id);
+    await trackFile(sessionId, "jsonl-undo.ts");
+    await takeSnapshot(sessionId, turn1Id, ["jsonl-undo.ts"]);
+
+    writeFileSync(join(workspace, "jsonl-undo.ts"), "modified");
+
+    const result = await undoLatest(sessionId);
+    expect(result).not.toBeNull();
+    expect(result!.messageId).toBe(turn1Id);
+    expect(readFile("jsonl-undo.ts")).toBe("original");
+
+    const lines = readSessionJSONL(sessionId);
+    expect(lines.length).toBe(1);
+    const onlyEvent = JSON.parse(lines[0]!);
+    expect(onlyEvent.type).toBe("session");
+
+    const allText = lines.join("\n");
+    expect(allText).not.toContain(turn1Id);
+    expect(allText).not.toContain("assistant-1");
+  });
+
+  test("undo with two turns truncates to the previous turn", async () => {
+    createFile("jsonl-undo2.ts", "original");
+
+    writeSessionJSONL(sessionId, [
+      JSON.stringify({ v: 1, ts: 1, sessionId, type: "session", session: { id: sessionId, title: null, directory: workspace, parentSessionId: null, kind: "main", taskId: null, summary: null, parentSummary: null, filesModified: null, timeCreated: 1, timeUpdated: 1 } }),
+      JSON.stringify({ v: 1, ts: 2, sessionId, type: "message", messageId: turn1Id, role: "user", modelId: null, providerId: null, timeCreated: 2 }),
+      JSON.stringify({ v: 1, ts: 3, sessionId, type: "part", messageId: turn1Id, partId: "part-user-1", partType: "text", data: { text: "first" } }),
+      JSON.stringify({ v: 1, ts: 4, sessionId, type: "message-end", messageId: turn1Id, finish: "stop", cost: null, tokensIn: null, tokensOut: null, timeCompleted: 4 }),
+      JSON.stringify({ v: 1, ts: 5, sessionId, type: "message", messageId: turn2Id, role: "user", modelId: null, providerId: null, timeCreated: 5 }),
+      JSON.stringify({ v: 1, ts: 6, sessionId, type: "part", messageId: turn2Id, partId: "part-user-2", partType: "text", data: { text: "second" } }),
+      JSON.stringify({ v: 1, ts: 7, sessionId, type: "message-end", messageId: turn2Id, finish: "stop", cost: null, tokensIn: null, tokensOut: null, timeCompleted: 7 }),
+    ]);
+
+    // Simulate two tracked turns: turn1 nothing, turn2 touches a file
+    setCurrentTurn(sessionId, turn1Id);
+    await trackFile(sessionId, "jsonl-undo2.ts");
+    await takeSnapshot(sessionId, turn1Id, ["jsonl-undo2.ts"]);
+
+    // Manually add a second turn entry to the tracker
+    setCurrentTurn(sessionId, turn2Id);
+    await trackFile(sessionId, "jsonl-undo2.ts");
+
+    writeFileSync(join(workspace, "jsonl-undo2.ts"), "modified");
+
+    const result = await undoLatest(sessionId);
+    expect(result).not.toBeNull();
+    expect(result!.messageId).toBe(turn2Id);
+
+    const lines = readSessionJSONL(sessionId);
+    const allText = lines.join("\n");
+    expect(allText).toContain(turn1Id);
+    expect(allText).not.toContain(turn2Id);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // clearHistory
 // ---------------------------------------------------------------------------
 
@@ -296,7 +389,7 @@ describe("clearHistory", () => {
   test("clears all undo data for a session", async () => {
     createFile("cleanup.ts", "cleanup-original");
 
-    setCurrentTurn(turn1Id);
+    setCurrentTurn(sessionId, turn1Id);
     await trackFile(sessionId, "cleanup.ts");
     await takeSnapshot(sessionId, turn1Id, ["cleanup.ts"]);
 

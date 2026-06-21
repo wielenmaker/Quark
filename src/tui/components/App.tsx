@@ -79,6 +79,8 @@ interface AppProps {
   getCurrentProfile?: () => string
   getSkills?: () => { id: string; name: string }[]
   getCurrentSkill?: () => string
+  getTools?: () => { id: string; name: string }[]
+  getCurrentTool?: () => string
   initialSessionId?: string
   initialModelName?: string
   initialSkillCount?: number
@@ -379,7 +381,7 @@ export const App: Component<AppProps> = (props) => {
     }
 
     // Choice pickers: filter the list by what the user types
-    if ((s.mode === "models" || s.mode === "profiles" || s.mode === "skills") && s.active) {
+    if ((s.mode === "models" || s.mode === "profiles" || s.mode === "skills" || s.mode === "tools") && s.active) {
       const options = getChoiceOptions(s.mode)
       if (!options) return
       const query = newValue
@@ -468,10 +470,10 @@ export const App: Component<AppProps> = (props) => {
   }
 
   const getChoiceOptions = (mode: ChoicePickerMode) =>
-    mode === "models" ? props.getModels?.() : mode === "profiles" ? props.getProfiles?.() : props.getSkills?.()
+    mode === "models" ? props.getModels?.() : mode === "profiles" ? props.getProfiles?.() : mode === "tools" ? props.getTools?.() : props.getSkills?.()
 
   const getCurrentChoice = (mode: ChoicePickerMode) =>
-    mode === "models" ? props.getCurrentModel?.() ?? "" : mode === "profiles" ? props.getCurrentProfile?.() ?? "" : props.getCurrentSkill?.() ?? ""
+    mode === "models" ? props.getCurrentModel?.() ?? "" : mode === "profiles" ? props.getCurrentProfile?.() ?? "" : mode === "tools" ? props.getCurrentTool?.() ?? "" : props.getCurrentSkill?.() ?? ""
 
   const openChoicePicker = (mode: ChoicePickerMode): boolean => {
     const options = getChoiceOptions(mode)
@@ -521,6 +523,10 @@ export const App: Component<AppProps> = (props) => {
       return
     }
 
+    if (commandId === "tool" && args.trim() === "list" && openChoicePicker("tools")) {
+      return
+    }
+
     if (commandId === "statistics") {
       const stats = collectStatistics()
       const chart = renderStatisticsChart(stats)
@@ -534,6 +540,8 @@ export const App: Component<AppProps> = (props) => {
         .then((res) => {
           if (res?.handled && res.next === "sessions-picker") {
             openSessionsPicker()
+          } else if (res?.handled && res.next === "tool-picker") {
+            openChoicePicker("tools")
           }
         })
     }
@@ -615,14 +623,29 @@ export const App: Component<AppProps> = (props) => {
         }
 
         // --- Choice picker mode ---
-        if (s.mode === "models" || s.mode === "profiles" || s.mode === "skills") {
+        if (s.mode === "models" || s.mode === "profiles" || s.mode === "skills" || s.mode === "tools") {
           const selected = s.pickerItems[s.selectedIndex]
           if (selected) {
             setSlash(SLASH_INACTIVE)
             setInputText("")
-            const command = s.mode === "models" ? "model" : s.mode === "profiles" ? "profile" : "skills"
+            let command: string
+            let commandArgs: string
+            if (s.mode === "models") {
+              command = "model"
+              commandArgs = selected.id
+            } else if (s.mode === "profiles") {
+              command = "profile"
+              commandArgs = selected.id
+            } else if (s.mode === "tools") {
+              // Selecting a user tool adds it to the session
+              command = "tool"
+              commandArgs = `add ${selected.id}`
+            } else {
+              command = "skills"
+              commandArgs = selected.id
+            }
             if (props.onCommand) {
-              props.onCommand(command, selected.id, state.store.sessionId)
+              props.onCommand(command, commandArgs, state.store.sessionId)
             }
             if (s.mode === "models") {
               state.setStore("status", "modelName", selected.id)
@@ -795,7 +818,7 @@ export const App: Component<AppProps> = (props) => {
       if (s.mode === "worktrees") {
         return { type: "worktrees", rows: s.worktreeRows, selectedIndex: s.selectedIndex }
       }
-      if (s.mode === "models" || s.mode === "profiles" || s.mode === "skills") {
+      if (s.mode === "models" || s.mode === "profiles" || s.mode === "skills" || s.mode === "tools") {
         return { type: s.mode, items: s.pickerItems, selectedIndex: s.selectedIndex }
       }
       return { type: "commands", items: s.items, selectedIndex: s.selectedIndex, query: s.query }

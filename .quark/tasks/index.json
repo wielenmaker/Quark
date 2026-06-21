@@ -2102,5 +2102,517 @@
     "profile": "coder",
     "timeCreated": 1781599338407,
     "timeUpdated": 1781599350386
+  },
+  {
+    "id": "task_kBfQSFRFw984xBFp",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781601777323,
+    "timeUpdated": 1781601780624
+  },
+  {
+    "id": "task_h7CHrA1JSipq2ioi",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781601777382,
+    "timeUpdated": 1781601780495
+  },
+  {
+    "id": "task_HiuJb3OaweQ7SGC7",
+    "title": "Test Request",
+    "description": "Test Request",
+    "profile": "coder",
+    "timeCreated": 1781604426103,
+    "timeUpdated": 1781604435296
+  },
+  {
+    "id": "task_MfzvkxuFToradICe",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781604952904,
+    "timeUpdated": 1781604957506
+  },
+  {
+    "id": "task_cLPsvJeccgb24zI4",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781604952963,
+    "timeUpdated": 1781604955957
+  },
+  {
+    "id": "task_uFZleCTf78Z9V2dQ",
+    "title": "Random Test Request",
+    "description": "Random Test Request",
+    "profile": "coder",
+    "timeCreated": 1781605550505,
+    "timeUpdated": 1781605555145
+  },
+  {
+    "id": "task_weWOQZ9kuk8OrDS9",
+    "title": "Undo Mechanism",
+    "description": "Undo Mechanism",
+    "profile": "coder",
+    "timeCreated": 1781605714899,
+    "timeUpdated": 1781605719128
+  },
+  {
+    "id": "task_Gk3DGyqWIgzkbSRS",
+    "title": "Session JSONL Data Model",
+    "description": "Session JSONL Data Model",
+    "profile": "coder",
+    "timeCreated": 1781621380284,
+    "timeUpdated": 1781621388348
+  },
+  {
+    "id": "task_cZuanXVl9Je0rE5A",
+    "title": "Research best practices for creating a writing coach agent.",
+    "description": "Research best practices for creating a writing coach agent.",
+    "profile": "coder",
+    "timeCreated": 1781761069527,
+    "timeUpdated": 1781761076428
+  },
+  {
+    "id": "task_1FQXYPmkFz6U9gRZ",
+    "title": "Draft Writing",
+    "description": "Draft Writing",
+    "profile": "writing-coach",
+    "timeCreated": 1781761335051,
+    "timeUpdated": 1781761353261
+  },
+  {
+    "id": "task_j81IUYUUWYyG81TP",
+    "title": "Ask about whether the quark tool supports /tool list and /tool add commands for managing tools.",
+    "description": "Ask about whether the quark tool supports /tool list and /tool add commands for managing tools.",
+    "profile": "coder",
+    "timeCreated": 1781764814599,
+    "timeUpdated": 1781764818200
+  },
+  {
+    "id": "task_TIbYnBAbG3HsGmMK",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765304236,
+    "timeUpdated": 1781765307257
+  },
+  {
+    "id": "task_YLsYy2Fazcd1n7k5",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765304261,
+    "timeUpdated": 1781765307254
+  },
+  {
+    "id": "task_G2RNXm9VT6UHglvO",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765609339,
+    "timeUpdated": 1781765611894
+  },
+  {
+    "id": "task_19gWdXUkrf2HxS7E",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765609394,
+    "timeUpdated": 1781765612465
+  },
+  {
+    "id": "task_Pwk1ZYko4TBSqSi1",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765916507,
+    "timeUpdated": 1781765919354
+  },
+  {
+    "id": "task_JszdO7rmdNdlMEFw",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781765916531,
+    "timeUpdated": 1781765919338
+  },
+  {
+    "id": "task_eKDWvfoiSlchD5wE",
+    "title": "Create an endpoint or command to list all tools.",
+    "description": "Create an endpoint or command to list all tools.",
+    "profile": "coder",
+    "timeCreated": 1781766327288,
+    "timeUpdated": 1781766337550
+  },
+  {
+    "id": "task_NGCCuCtCzFV2aNWh",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781768990558,
+    "timeUpdated": 1781768993534
+  },
+  {
+    "id": "task_Vwo4UbOXNNC00Kbq",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781768990584,
+    "timeUpdated": 1781768993532
+  },
+  {
+    "id": "task_uvnJ6W4BJ7jSLLEh",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769020110,
+    "timeUpdated": 1781769024461
+  },
+  {
+    "id": "task_mExyOSafl59qV9Es",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769020135,
+    "timeUpdated": 1781769023667
+  },
+  {
+    "id": "task_QNsEct6Ecfd6EfDo",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769050779,
+    "timeUpdated": 1781769053685
+  },
+  {
+    "id": "task_gXlzgfqQqOzDyGJd",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769050832,
+    "timeUpdated": 1781769053684
+  },
+  {
+    "id": "task_VEOy3POj7hZ896M8",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769080426,
+    "timeUpdated": 1781769085128
+  },
+  {
+    "id": "task_4tAjp2xrTdLYi72y",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769080451,
+    "timeUpdated": 1781769082497
+  },
+  {
+    "id": "task_uKRLV66grEVoQps0",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769114894,
+    "timeUpdated": 1781769117530
+  },
+  {
+    "id": "task_yzYWEEZBdYHydg2U",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781769114940,
+    "timeUpdated": 1781769117380
+  },
+  {
+    "id": "task_jCGQumf06wpfZwQ0",
+    "title": "exit",
+    "description": "exit",
+    "profile": "coder",
+    "timeCreated": 1781770492157,
+    "timeUpdated": 1781770492157
+  },
+  {
+    "id": "task_KAm70zkLs4IREGYh",
+    "title": "Undo Feature",
+    "description": "Undo Feature",
+    "profile": "coder",
+    "timeCreated": 1781770573477,
+    "timeUpdated": 1781770596143
+  },
+  {
+    "id": "task_WwtJYmk9CcER7Z5S",
+    "title": "Agent Client Protocol",
+    "description": "Agent Client Protocol",
+    "profile": "general",
+    "timeCreated": 1781878605223,
+    "timeUpdated": 1781878609819
+  },
+  {
+    "id": "task_SMR7URKsnKBmtkl5",
+    "title": "Agent Client Protocol",
+    "description": "Agent Client Protocol",
+    "profile": "general",
+    "timeCreated": 1781878621704,
+    "timeUpdated": 1781878627258
+  },
+  {
+    "id": "task_bdf3YcnHdZSbbyet",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1781880177825,
+    "timeUpdated": 1781880181281
+  },
+  {
+    "id": "task_9TFkbQmaaytjKWjb",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1781881899440,
+    "timeUpdated": 1781881903536
+  },
+  {
+    "id": "task_A66Z8SwWAdaXvwWt",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1781881999575,
+    "timeUpdated": 1781882002347
+  },
+  {
+    "id": "task_ZK1cEBh5axX4iTcR",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1781882127523,
+    "timeUpdated": 1781882129979
+  },
+  {
+    "id": "task_UKLhRz1djeQZXmvJ",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781882207101,
+    "timeUpdated": 1781882210117
+  },
+  {
+    "id": "task_gg5Z4wAumLegol7n",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1781882654084,
+    "timeUpdated": 1781882657556
+  },
+  {
+    "id": "task_CGRtcXpgxyKd6zp7",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781934549175,
+    "timeUpdated": 1781934554844
+  },
+  {
+    "id": "task_IzwE06ByqkvcQg2B",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1781934549202,
+    "timeUpdated": 1781934551259
+  },
+  {
+    "id": "task_yn4TcoI1ZEj6dLfd",
+    "title": "Reply exactly ACP_OK. Do not call tools.",
+    "description": "Reply exactly ACP_OK. Do not call tools.",
+    "profile": "coder",
+    "timeCreated": 1781934611658,
+    "timeUpdated": 1781934611658
+  },
+  {
+    "id": "task_xOoi7mstEqergTzc",
+    "title": "Gh CLI Field Query",
+    "description": "Gh CLI Field Query",
+    "profile": "coder",
+    "timeCreated": 1781956230883,
+    "timeUpdated": 1781956237961
+  },
+  {
+    "id": "task_YFBSQA65yCyDNeBC",
+    "title": "ACP TTFT Profiling",
+    "description": "ACP TTFT Profiling",
+    "profile": "coder",
+    "timeCreated": 1781965357951,
+    "timeUpdated": 1781965378676
+  },
+  {
+    "id": "task_Il5DPz9wHqnWDgoc",
+    "title": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "description": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "profile": "coder",
+    "timeCreated": 1781965480540,
+    "timeUpdated": 1781965480540
+  },
+  {
+    "id": "task_tCUXfCUgnyKdmPZs",
+    "title": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "description": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "profile": "coder",
+    "timeCreated": 1781965485164,
+    "timeUpdated": 1781965485164
+  },
+  {
+    "id": "task_D9gNL6zgjX8rG8o3",
+    "title": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "description": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "profile": "coder",
+    "timeCreated": 1781965488994,
+    "timeUpdated": 1781965488994
+  },
+  {
+    "id": "task_Z3ZoR20n5BoTYPfE",
+    "title": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "description": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "profile": "coder",
+    "timeCreated": 1781965493079,
+    "timeUpdated": 1781965493079
+  },
+  {
+    "id": "task_1Cgclfun9vOU8l9U",
+    "title": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "description": "Write a short paragraph about the benefits of TypeScript in modern web development.",
+    "profile": "coder",
+    "timeCreated": 1781965497243,
+    "timeUpdated": 1781965497243
+  },
+  {
+    "id": "task_qkKojfov7t4DYFib",
+    "title": "Say hello",
+    "description": "Say hello",
+    "profile": "coder",
+    "timeCreated": 1781965614249,
+    "timeUpdated": 1781965614249
+  },
+  {
+    "id": "task_Y7pAQcJord2LwtDR",
+    "title": "Say hello",
+    "description": "Say hello",
+    "profile": "coder",
+    "timeCreated": 1781965699464,
+    "timeUpdated": 1781965699464
+  },
+  {
+    "id": "task_ECU9zTwBEYKjtsx8",
+    "title": "Say hello",
+    "description": "Say hello",
+    "profile": "coder",
+    "timeCreated": 1781965703081,
+    "timeUpdated": 1781965703081
+  },
+  {
+    "id": "task_fkXsA2wBoVg3ujJ0",
+    "title": "Say hello",
+    "description": "Say hello",
+    "profile": "coder",
+    "timeCreated": 1781965705534,
+    "timeUpdated": 1781965705534
+  },
+  {
+    "id": "task_q8e0a8cgX628g5TR",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782018327337,
+    "timeUpdated": 1782018333273
+  },
+  {
+    "id": "task_Vt3a4qdYyr6F2paJ",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782018335176,
+    "timeUpdated": 1782018338841
+  },
+  {
+    "id": "task_XcpZLcvThogBHoif",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782018412875,
+    "timeUpdated": 1782018416179
+  },
+  {
+    "id": "task_IpW1KZI8LXyTvXR3",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782018540534,
+    "timeUpdated": 1782018543320
+  },
+  {
+    "id": "task_Gm4mF771qf7Cnfxt",
+    "title": "Generate an ASCII art diagram of the /session view interface for the TUI.",
+    "description": "Generate an ASCII art diagram of the /session view interface for the TUI.",
+    "profile": "coder",
+    "timeCreated": 1782018754463,
+    "timeUpdated": 1782018781376
+  },
+  {
+    "id": "task_c6QO1lRvpnCa9iB5",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782018772047,
+    "timeUpdated": 1782018777947
+  },
+  {
+    "id": "task_pm9ep02IKst3okee",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782019006311,
+    "timeUpdated": 1782019008890
+  },
+  {
+    "id": "task_jNbI0AgzzmeymKqH",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782019260411,
+    "timeUpdated": 1782019263116
+  },
+  {
+    "id": "task_9MqSNzFF7uRZ0AcA",
+    "title": "GitHub Issue List",
+    "description": "GitHub Issue List",
+    "profile": "coder",
+    "timeCreated": 1782019540352,
+    "timeUpdated": 1782019551257
+  },
+  {
+    "id": "task_9GCLqVhBEwqc8nAN",
+    "title": "Investigate whether the thinking [T] indicator persists when switching between models in the TUI",
+    "description": "Investigate whether the thinking [T] indicator persists when switching between models in the TUI",
+    "profile": "coder",
+    "timeCreated": 1782019705249,
+    "timeUpdated": 1782019709430
+  },
+  {
+    "id": "task_qXGF3URXU8uAq4vb",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782019837281,
+    "timeUpdated": 1782019839705
+  },
+  {
+    "id": "task_rqzj292RrX9opT0V",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "general",
+    "timeCreated": 1782019910640,
+    "timeUpdated": 1782019913092
   }
 ]

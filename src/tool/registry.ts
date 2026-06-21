@@ -113,6 +113,10 @@ export function get(id: string): ToolDef | undefined {
   return registry.get(id)
 }
 
+export function has(id: string): boolean {
+  return registry.has(id)
+}
+
 /**
  * Return all registered tools.
  */

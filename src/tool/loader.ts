@@ -12,10 +12,18 @@ import { register, validateTool, type ToolValidationError } from "./registry"
 import { error as notifyError, warn as notifyWarn } from "../notification/notification"
 import type { ToolDef } from "./tool"
 
-const TOOLS_DIR = path.join(os.homedir(), ".config", "quark", "tools")
+const DEFAULT_TOOLS_DIR = path.join(os.homedir(), ".config", "quark", "tools")
+
+// Test seam: allows tests to point the loader at a tmp directory.
+// Production code should always use getToolsDir() — never read this directly.
+let _toolsDirOverride: string | null = null
+
+export function setToolsDir(dir: string | null): void {
+  _toolsDirOverride = dir
+}
 
 // Built-in tools (registered by bootstrap, not loaded from disk)
-const BUILTIN_TOOLS = new Set(["read", "look", "skill", "question", "find_session", "read_session"])
+export const BUILTIN_TOOLS = new Set(["read", "look", "skill", "question", "find_session", "read_session"])
 
 export interface LoadResult {
   loaded: string[]
@@ -43,7 +51,7 @@ export async function loadProfileTools(toolIds: string[]): Promise<LoadResult> {
   }
 
   // Check if tools directory exists
-  if (!fs.existsSync(TOOLS_DIR)) {
+  if (!fs.existsSync(getToolsDir())) {
     // All tools are missing
     for (const id of toLoad) {
       result.missing.push(id)
@@ -54,7 +62,7 @@ export async function loadProfileTools(toolIds: string[]): Promise<LoadResult> {
 
   // Load each declared tool
   for (const id of toLoad) {
-    const filePath = path.join(TOOLS_DIR, `${id}.ts`)
+    const filePath = path.join(getToolsDir(), `${id}.ts`)
 
     // Check file exists
     if (!fs.existsSync(filePath)) {
@@ -119,8 +127,9 @@ export async function loadProfileTools(toolIds: string[]): Promise<LoadResult> {
 }
 
 /**
- * Get the tools directory path
+ * Get the tools directory path. Honors the test override; otherwise
+ * returns the default `~/.config/quark/tools/`.
  */
 export function getToolsDir(): string {
-  return TOOLS_DIR
+  return _toolsDirOverride ?? DEFAULT_TOOLS_DIR
 }

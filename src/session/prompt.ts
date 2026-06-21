@@ -121,7 +121,7 @@ export async function prompt(input: {
   bus.emit("user-message", { sessionId, messageId: userMsg.id, text });
 
   // Undo: set current turn and proactively snapshot files from the previous turn
-  setCurrentTurn(userMsg.id);
+  setCurrentTurn(sessionId, userMsg.id);
   preTurnSnapshot(sessionId, userMsg.id).catch(() => {
     // Pre-turn snapshot is best-effort — never fail the session
   });

@@ -25,7 +25,7 @@ import { detectFromConfigOrOS } from "./terminal-bg"
 import { applyTheme, setTerminalBg, lightTheme, darkTheme } from "./theme"
 import { writeClipboard } from "./clipboard"
 import { clearCache as clearSkillCache } from "../skill/skill"
-import { register, clear as clearRegistry } from "../tool/registry"
+import { register, clear as clearRegistry, has as hasTool } from "../tool/registry"
 import { buildSkillTool } from "../tool/skill"
 import { resetBootstrap } from "../bootstrap"
 import { info as notifyInfo } from "../notification/notification"
@@ -33,6 +33,7 @@ import { undoLatest } from "../commands/undo"
 import { runGoal } from "../commands/goal/orchestrator"
 import { listTasks } from "../task/task"
 import { listWorktrees, filterToProjectWorktrees, getBranchFromPath, getWorktreeBranch, resolveWorktree, createWorktree } from "../worktree/worktree"
+import { listToolFiles, addToolById, notifyAddSuccess, notifyAddBuiltin, notifyAddError } from "../tool/extra-tools"
 import * as path from "path"
 import * as fs from "fs"
 
@@ -396,6 +397,44 @@ async function handleCommand(command: string, args: string, sessionId: string | 
     return handleWorktreeCommand(args, sid)
   }
 
+  // /tool add works even without an active session. /tool list is handled
+  // by the choice picker (see executeCommand in App.tsx) — when typed directly
+  // the picker takes over before reaching this handler.
+  if (command === "tool") {
+    const subArgs = args.trim()
+    const spaceIdx = subArgs.indexOf(" ")
+    const subcommand = (spaceIdx === -1 ? subArgs : subArgs.slice(0, spaceIdx)).trim()
+    const subRest = spaceIdx === -1 ? "" : subArgs.slice(spaceIdx + 1).trim()
+
+    if (subcommand === "add") {
+      const id = subRest
+      if (!id) {
+        notifyAddError("(no id)", "Usage: /tool add <id>")
+        return { handled: true }
+      }
+      const result = await addToolById(id)
+      if (result.ok) {
+        if (result.reason === "builtin") {
+          notifyAddBuiltin(result.id)
+        } else {
+          notifyAddSuccess(result.id)
+        }
+      } else {
+        notifyAddError(result.id, result.error)
+      }
+      return { handled: true }
+    }
+
+    if (subcommand === "list") {
+      // The picker handles listing; this branch is a fallback for any path
+      // that bypasses executeCommand (e.g. direct onCommand calls).
+      return { handled: true, next: "tool-picker" }
+    }
+
+    notifyAddError(subcommand || "(missing subcommand)", "Usage: /tool list | /tool add <id>")
+    return { handled: true }
+  }
+
   // All other commands require an active session
   if (!sid) {
     bus.emit("error", { sessionId: "unknown", error: new Error("No active session — send a message first") })
@@ -406,7 +445,7 @@ async function handleCommand(command: string, args: string, sessionId: string | 
     case "undo": {
       const result = await undoLatest(sid)
       if (!result) {
-        notifyInfo("Undo", "Nothing to undo — no tracked file changes", 3000)
+        notifyInfo("Undo", "Nothing to undo — no messages to revert", 3000)
         return { handled: true }
       }
 
@@ -595,6 +634,19 @@ function handleGetCurrentSkill() {
   return ""
 }
 
+function handleGetTools() {
+  // Append "(loaded)" to the label for tools already registered in this session,
+  // so the picker doubles as a status display. The id stays the bare filename.
+  return listToolFiles().map((id) => ({
+    id,
+    name: hasTool(id) ? `${id} (loaded)` : id,
+  }))
+}
+
+function handleGetCurrentTool() {
+  return ""
+}
+
 // Pre-create the renderer so module-level code (e.g. openEditor) can
 // suspend/resume it when shelling out to an external editor.
 const renderer = await createCliRenderer({
@@ -653,6 +705,8 @@ render(() => (
     getCurrentProfile={handleGetCurrentProfile}
     getSkills={handleGetSkills}
     getCurrentSkill={handleGetCurrentSkill}
+    getTools={handleGetTools}
+    getCurrentTool={handleGetCurrentTool}
     initialSessionId={currentSession?.id}
     initialModelName={modelName}
     initialSkillCount={skills.length}

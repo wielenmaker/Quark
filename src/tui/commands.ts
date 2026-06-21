@@ -28,6 +28,8 @@ export const commands: SlashCommand[] = [
   { id: "goal", description: "Pursue a goal autonomously until done", usage: "<goal description>" },
   { id: "statistics", description: "Show token usage statistics and charts" },
   { id: "worktree", description: "Switch or create git worktrees", usage: "[create <branch>]" },
+  { id: "tool list", description: "List user tools available in ~/.config/quark/tools/" },
+  { id: "tool add", description: "Temporarily load a user tool into this session", usage: "<id>" },
   { id: "exit", description: "Exit Quark" },
 ]
 
@@ -35,7 +37,7 @@ export const commands: SlashCommand[] = [
  * Filter commands by prefix match against query.
  * Returns up to `limit` matching commands.
  */
-export function filterCommands(query: string, limit = 15): SlashCommand[] {
+export function filterCommands(query: string, limit = 30): SlashCommand[] {
   if (!query) return commands.slice(0, limit)
   const lower = query.toLowerCase()
   return commands

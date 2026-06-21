@@ -372,6 +372,72 @@ function replayEvents(events: SessionLogEvent[]): {
 }
 
 // ---------------------------------------------------------------------------
+// rewriteJSONL — strip all events from a given message onward
+//
+// Used by /undo to make the durable log match the undone state. Finds the
+// first `message` event with the matching `messageId` and removes that line
+// plus every event after it. Earlier events (session envelope, previous
+// messages) are preserved.
+//
+// Ephemeral sessions mutate the in-memory event array instead of disk.
+// ---------------------------------------------------------------------------
+
+function filterEventsFromMessageId(
+  events: SessionLogEvent[],
+  fromMessageId: string,
+): SessionLogEvent[] {
+  const idx = events.findIndex(
+    (e) => e.type === "message" && e.messageId === fromMessageId,
+  )
+  if (idx === -1) return events
+  return events.slice(0, idx)
+}
+
+export function rewriteJSONL(sessionId: string, fromMessageId: string): void {
+  // Ephemeral sessions: filter the in-memory event array
+  const memEvents = ephemeralEvents.get(sessionId)
+  if (isEphemeral(sessionId) || memEvents) {
+    const filtered = filterEventsFromMessageId(memEvents ?? [], fromMessageId)
+    ephemeralEvents.set(sessionId, filtered)
+    return
+  }
+
+  const logPath = getSessionLogPath(sessionId)
+  let raw: string
+  try {
+    raw = readFileSync(logPath, "utf-8")
+  } catch {
+    return
+  }
+
+  const lines = raw.split("\n")
+  let cutIndex = -1
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line || !line.trim()) continue
+    try {
+      const event = JSON.parse(line) as SessionLogEvent
+      if (event.type === "message" && event.messageId === fromMessageId) {
+        cutIndex = i
+        break
+      }
+    } catch {
+      continue
+    }
+  }
+
+  if (cutIndex === -1) return
+
+  const keptLines = lines.slice(0, cutIndex)
+  const newContent = keptLines.join("\n") + "\n"
+
+  // Atomic write: temp file then rename
+  const tmpPath = logPath + ".tmp"
+  writeFileSync(tmpPath, newContent)
+  renameSync(tmpPath, logPath)
+}
+
+// ---------------------------------------------------------------------------
 // rebuildSessionMeta — replay JSONL + rewrite meta.json
 // ---------------------------------------------------------------------------
 

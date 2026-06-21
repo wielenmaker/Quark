@@ -34,15 +34,18 @@ describe("buildPickerItems", () => {
 })
 
 describe("pickerModeForCommand", () => {
-  test("opens model, profile, and skills pickers", () => {
+  test("opens model, profile, skills, and tools pickers", () => {
     expect(pickerModeForCommand("model")).toBe("models")
     expect(pickerModeForCommand("profile")).toBe("profiles")
     expect(pickerModeForCommand("skills")).toBe("skills")
+    expect(pickerModeForCommand("tool list")).toBe("tools")
   })
 
   test("ignores non-picker commands", () => {
     expect(pickerModeForCommand("help")).toBeNull()
     expect(pickerModeForCommand("new")).toBeNull()
     expect(pickerModeForCommand("clear")).toBeNull()
+    // /tool add is the add subcommand, not the list picker
+    expect(pickerModeForCommand("tool add")).toBeNull()
   })
 })

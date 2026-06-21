@@ -46,6 +46,7 @@ status: done
 | File | Status | Description |
 |---|---|---|
 | [statistics-command.md](commands/statistics-command.md) | In Progress | `/statistics` — token usage charts (per-model, per-day) via Unicode bar charts |
+| [tool-list-add.md](commands/tool-list-add.md) | Draft | `/tool list` enumerates user tools in `~/.config/quark/tools/`; `/tool add <id>` temporarily loads one into the session |
 
 ## 🖼️ Desktop App
 *Tauri desktop application: diff workspace, composer, model pickers.*
