@@ -136,7 +136,12 @@ export function wireEvents(state: AppState) {
   // sessionId in its payload and the createComputed on() wrapper would
   // filter it out (undefined !== sid).
   const handleModelSwitched = (data: BusEvents["model-switched"]) => {
-    dispatch(state, { type: "model-switched", modelSpec: data.modelSpec })
+    dispatch(state, {
+      type: "model-switched",
+      modelSpec: data.modelSpec,
+      thinkingEffort: data.thinkingEffort,
+      thinkingMode: data.thinkingMode,
+    })
   }
   bus.on("model-switched", handleModelSwitched)
 

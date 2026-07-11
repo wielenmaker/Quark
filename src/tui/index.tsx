@@ -149,7 +149,11 @@ async function switchToWorktree(id: string): Promise<{ success: boolean; error?:
   const currentModel = modelOverride ?? activeAgent.model?.id ?? loadConfig().main_model
 
   bus.emit("session-reset", { sessionId: null })
-  bus.emit("model-switched", { modelSpec: currentModel })
+  bus.emit("model-switched", {
+    modelSpec: currentModel,
+    thinkingEffort: modelOverride ? "none" : activeAgent.model?.thinking?.effort ?? "none",
+    thinkingMode: modelOverride ? undefined : activeAgent.model?.thinking?.mode,
+  })
   bus.emit("worktree-switched", {
     cwd: target.path,
     activeWorktree,
@@ -248,7 +252,7 @@ async function handleCommand(command: string, args: string, sessionId: string | 
       return { handled: true }
     }
     modelOverride = args.trim()
-    bus.emit("model-switched", { modelSpec: modelOverride })
+    bus.emit("model-switched", { modelSpec: modelOverride, thinkingEffort: "none" })
     notifyInfo("Model", `Switched to: ${modelOverride}`, 3000)
     return { handled: true }
   }
@@ -394,8 +398,16 @@ async function handleCommand(command: string, args: string, sessionId: string | 
   // /reload-config — reload config without restarting (works without an active session)
   if (command === "reload-config") {
     resetConfigCache()
-    const currentModel = modelOverride ?? loadConfig().main_model
-    bus.emit("model-switched", { modelSpec: currentModel })
+    resetProfileCache()
+    const reloadedProfile = resolveProfile(activeAgent.id)
+    const reloadedPrompt = readPromptFile(reloadedProfile)
+    activeAgent = agentFromProfile(reloadedProfile, reloadedPrompt.content)
+    const currentModel = modelOverride ?? activeAgent.model?.id ?? loadConfig().main_model
+    bus.emit("model-switched", {
+      modelSpec: currentModel,
+      thinkingEffort: modelOverride ? "none" : activeAgent.model?.thinking?.effort ?? "none",
+      thinkingMode: modelOverride ? undefined : activeAgent.model?.thinking?.mode,
+    })
     refreshLMStudio()
     notifyInfo("Config", "Config reloaded", 3000)
     return { handled: true }

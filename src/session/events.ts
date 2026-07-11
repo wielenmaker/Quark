@@ -85,7 +85,7 @@ export interface BusEvents {
   "session-title-changed": { sessionId: string; title: string | null; updatedAt?: number }
 
   // Model was switched (e.g. Tab/Shift+Tab cycling, /model command) — TUI should update token limit
-  "model-switched": { modelSpec: string } // e.g. "copilot/claude-sonnet-4.6" or "openai/gpt-4o"
+  "model-switched": { modelSpec: string; thinkingEffort?: string; thinkingMode?: string } // e.g. "copilot/claude-sonnet-4.6" or "openai/gpt-4o"
 
   // Session was reset (e.g. /clear command — TUI should switch to new session)
   "session-reset": { sessionId: string | null }

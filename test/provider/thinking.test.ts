@@ -115,6 +115,15 @@ describe("ThinkingNormalizer normalize", () => {
     expect(result).toBeUndefined()
   })
 
+  test("rejects an effort unsupported by the configured model", () => {
+    const normalizer = getThinkingNormalizer("deepseek-v4-flash")
+    normalizer.configure({ effort: "xhigh" })
+
+    expect(() => normalizer.normalize("opencode")).toThrow(
+      'Invalid thinking effort "xhigh" for model "deepseek-v4-flash". Supported efforts: none, high, max.',
+    )
+  })
+
   test("kimi uses correct key with thinking type enabled", () => {
     const normalizer = getThinkingNormalizer("kimi-k2.6")
     normalizer.configure({ effort: "thinking" })

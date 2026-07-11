@@ -368,6 +368,34 @@ describe("parseProfilesFromYAML", () => {
     expect(profiles.coder.model).toEqual({ id: "codex/gpt-5.6" })
   })
 
+  test("rejects an effort unsupported by the profile model", () => {
+    expect(() => parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: {
+            id: "opencode/deepseek-v4-flash",
+            thinking: { effort: "xhigh" },
+          },
+        },
+      },
+    }, "/tmp")).toThrow(
+      'Invalid thinking effort "xhigh" for model "opencode/deepseek-v4-flash". Supported efforts: none, high, max.',
+    )
+  })
+
+  test("rejects enabled thinking for a profile model without thinking support", () => {
+    expect(() => parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: {
+            id: "copilot/gpt-4o",
+            thinking: { effort: "high" },
+          },
+        },
+      },
+    }, "/tmp")).toThrow('Thinking is not supported by model "copilot/gpt-4o".')
+  })
+
   test("ignores model configuration without an id", () => {
     const profiles = parseProfilesFromYAML({ profiles: { coder: { model: { thinking: { effort: "high" } } } } }, "/tmp")
     expect(profiles.coder.model).toBeUndefined()
@@ -1150,6 +1178,21 @@ profiles:
     const profile = resolveProfile("orchestrator")
     expect(profile.subAgents).toEqual(["researcher", "worker"])
     expect(getActive()).toHaveLength(0)
+  })
+
+  test("throws for unsupported thinking configured in project YAML", () => {
+    writeConfig(`
+profiles:
+  finder:
+    model:
+      id: opencode/deepseek-v4-flash
+      thinking:
+        effort: xhigh
+`)
+
+    expect(() => resolveProfile("finder")).toThrow(
+      'Invalid thinking effort "xhigh" for model "opencode/deepseek-v4-flash". Supported efforts: none, high, max.',
+    )
   })
 
   test("invalid sub-agent ID — stripped from result, warn notification fires", () => {

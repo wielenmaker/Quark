@@ -724,12 +724,11 @@ export function dispatch(state: AppState, action: TuiAction): void {
       const newLimit = lim?.context ?? lim?.input ?? 0
       setStore("status", "tokenLimit", newLimit)
       setStore("status", "modelName", action.modelSpec)
-      if (action.thinkingEffort !== undefined) {
-        setStore("thinkingEffort", action.thinkingEffort)
-      }
+      const effort = action.thinkingEffort ?? "none"
+      setStore("thinkingEffort", effort)
       const mode = action.thinkingMode
       getThinkingNormalizer(action.modelSpec).configure({
-        effort: action.thinkingEffort ?? state.store.thinkingEffort,
+        effort,
         mode: mode ?? "standard",
         modeExplicit: mode !== undefined,
       })

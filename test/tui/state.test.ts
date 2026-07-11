@@ -81,6 +81,9 @@ describe("dispatch: thinking actions", () => {
       expect(s.store.thinkingEffort).toBe("xhigh")
       dispatch(s, { type: "model-switched", modelSpec: "gpt-5-mini", thinkingEffort: "low" })
       expect(s.store.thinkingEffort).toBe("low")
+
+      dispatch(s, { type: "model-switched", modelSpec: "gpt-4o" })
+      expect(s.store.thinkingEffort).toBe("none")
     })
   })
 })

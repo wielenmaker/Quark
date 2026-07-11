@@ -20,6 +20,7 @@ import * as os from "os"
 import { parse as parseYAML, stringify as stringifyYAML } from "yaml"
 import { warn as notifyWarn } from "../notification/notification"
 import { type Action } from "../permission/permission"
+import { validateThinkingEffort } from "../provider/thinking"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,17 +151,21 @@ function parseModel(raw: unknown): ProfileDef["model"] | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const value = raw as Record<string, unknown>
   if (typeof value.id !== "string" || !value.id) return undefined
-  const thinking = parseThinking(value.thinking)
+  const thinking = parseThinking(value.thinking, value.id)
   return {
     id: value.id,
     ...(thinking ? { thinking } : {}),
   }
 }
 
-function parseThinking(raw: unknown): NonNullable<ProfileDef["model"]>["thinking"] | undefined {
+function parseThinking(
+  raw: unknown,
+  modelId?: string,
+): NonNullable<ProfileDef["model"]>["thinking"] | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const value = raw as Record<string, unknown>
   if (typeof value.effort !== "string" || !value.effort) return undefined
+  if (modelId) validateThinkingEffort(modelId, value.effort)
   return {
     effort: value.effort,
     ...(typeof value.mode === "string" && value.mode ? { mode: value.mode } : {}),
@@ -234,7 +239,9 @@ export function loadProfileConfig(): ProfileConfig {
       for (const [id, prof] of Object.entries(profiles)) {
         merged[id] = prof
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Thinking ")) throw error
+      if (error instanceof Error && error.message.startsWith("Invalid thinking effort ")) throw error
       // Skip invalid config files
     }
   }

@@ -122,6 +122,36 @@ describe("wireEvents: tool lifecycle", () => {
   })
 })
 
+describe("wireEvents: model switching", () => {
+  test("forwards thinking settings from a model-switched event", () => {
+    const s = setup("s1")
+
+    bus.emit("model-switched", {
+      modelSpec: "codex/gpt-5.6-luna",
+      thinkingEffort: "high",
+      thinkingMode: "pro",
+    })
+
+    expect(s.store.status.modelName).toBe("codex/gpt-5.6-luna")
+    expect(s.store.thinkingEffort).toBe("high")
+  })
+
+  test("clears thinking when a model-switched event has no thinking settings", () => {
+    const s = setup("s1")
+    dispatch(s, {
+      type: "model-switched",
+      modelSpec: "codex/gpt-5.6-luna",
+      thinkingEffort: "high",
+      thinkingMode: "pro",
+    })
+
+    bus.emit("model-switched", { modelSpec: "copilot/gpt-4o" })
+
+    expect(s.store.status.modelName).toBe("copilot/gpt-4o")
+    expect(s.store.thinkingEffort).toBe("none")
+  })
+})
+
 describe("wireEvents: loop lifecycle", () => {
   test("loop-start sets running true", () => {
     const s = setup("s1")

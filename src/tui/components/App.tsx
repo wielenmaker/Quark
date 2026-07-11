@@ -908,7 +908,6 @@ export const App: Component<AppProps> = (props) => {
           if (props.onCommand) {
             props.onCommand("model", next, state.store.sessionId)
           }
-          state.setStore("status", "modelName", next)
           bus.emit("model-switched", { modelSpec: next })
         }
       }
@@ -925,7 +924,6 @@ export const App: Component<AppProps> = (props) => {
           if (props.onCommand) {
             props.onCommand("model", prev, state.store.sessionId)
           }
-          state.setStore("status", "modelName", prev)
           bus.emit("model-switched", { modelSpec: prev })
         }
       }
