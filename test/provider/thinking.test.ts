@@ -1,9 +1,16 @@
 import { describe, test, expect } from "bun:test"
-import { getThinkingNormalizer, getThinkingLevels, resetThinkingNormalizer } from "../../src/provider/thinking"
+import { getDefaultThinkingEffort, getThinkingNormalizer, getThinkingLevels, resetThinkingNormalizer } from "../../src/provider/thinking"
 
 import { beforeEach } from "bun:test"
 
 beforeEach(() => resetThinkingNormalizer())
+
+describe("getDefaultThinkingEffort", () => {
+  test("uses none for models that support it and unknown models", () => {
+    expect(getDefaultThinkingEffort("opencode/deepseek-v4-pro")).toBe("none")
+    expect(getDefaultThinkingEffort("unknown-model")).toBe("none")
+  })
+})
 
 describe("getThinkingLevels", () => {
   test("returns effort levels for gpt-5", () => {

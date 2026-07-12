@@ -20,7 +20,7 @@ import * as os from "os"
 import { parse as parseYAML, stringify as stringifyYAML } from "yaml"
 import { warn as notifyWarn } from "../notification/notification"
 import { type Action } from "../permission/permission"
-import { validateThinkingEffort } from "../provider/thinking"
+import { getDefaultThinkingEffort, validateThinkingEffort } from "../provider/thinking"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -138,7 +138,7 @@ function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string):
       tools: Array.isArray(p.tools) ? (p.tools as string[]) : BUILTIN_CODER.tools,
       skills: Array.isArray(p.skills) ? (p.skills as string[]) : [],
       subAgents: Array.isArray(p.sub_agents) ? (p.sub_agents as string[]) : undefined,
-      model: parseModel(p.model),
+      model: parseModel(p.model, id),
       permissions: parsePermissions(p.permissions),
     }
   }
@@ -146,12 +146,12 @@ function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string):
   return profiles
 }
 
-function parseModel(raw: unknown): ProfileDef["model"] | undefined {
+function parseModel(raw: unknown, profileId?: string): ProfileDef["model"] | undefined {
   if (typeof raw === "string" && raw) return { id: raw }
   if (!raw || typeof raw !== "object") return undefined
   const value = raw as Record<string, unknown>
   if (typeof value.id !== "string" || !value.id) return undefined
-  const thinking = parseThinking(value.thinking, value.id)
+  const thinking = parseThinking(value.thinking, value.id, profileId)
   return {
     id: value.id,
     ...(thinking ? { thinking } : {}),
@@ -161,11 +161,23 @@ function parseModel(raw: unknown): ProfileDef["model"] | undefined {
 function parseThinking(
   raw: unknown,
   modelId?: string,
+  profileId?: string,
 ): NonNullable<ProfileDef["model"]>["thinking"] | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const value = raw as Record<string, unknown>
   if (typeof value.effort !== "string" || !value.effort) return undefined
-  if (modelId) validateThinkingEffort(modelId, value.effort)
+  try {
+    if (modelId) validateThinkingEffort(modelId, value.effort)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const fallback = getDefaultThinkingEffort(modelId ?? "")
+    notifyWarn(
+      "Thinking configuration",
+      `profiles.${profileId}.model.thinking.effort "${value.effort}" is invalid for "${modelId}". Using default "${fallback}". ${message}`,
+      0,
+    )
+    return { effort: fallback }
+  }
   return {
     effort: value.effort,
     ...(typeof value.mode === "string" && value.mode ? { mode: value.mode } : {}),

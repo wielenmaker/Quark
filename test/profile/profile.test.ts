@@ -368,8 +368,8 @@ describe("parseProfilesFromYAML", () => {
     expect(profiles.coder.model).toEqual({ id: "codex/gpt-5.6" })
   })
 
-  test("rejects an effort unsupported by the profile model", () => {
-    expect(() => parseProfilesFromYAML({
+  test("falls back to the model default for an effort unsupported by the profile model", () => {
+    const profiles = parseProfilesFromYAML({
       profiles: {
         coder: {
           model: {
@@ -378,13 +378,15 @@ describe("parseProfilesFromYAML", () => {
           },
         },
       },
-    }, "/tmp")).toThrow(
-      'Invalid thinking effort "xhigh" for model "opencode/deepseek-v4-flash". Supported efforts: none, high, max.',
-    )
+    }, "/tmp")
+    expect(profiles.coder.model).toEqual({
+      id: "opencode/deepseek-v4-flash",
+      thinking: { effort: "none" },
+    })
   })
 
-  test("rejects enabled thinking for a profile model without thinking support", () => {
-    expect(() => parseProfilesFromYAML({
+  test("falls back to none when the profile model does not support thinking", () => {
+    const profiles = parseProfilesFromYAML({
       profiles: {
         coder: {
           model: {
@@ -393,7 +395,11 @@ describe("parseProfilesFromYAML", () => {
           },
         },
       },
-    }, "/tmp")).toThrow('Thinking is not supported by model "copilot/gpt-4o".')
+    }, "/tmp")
+    expect(profiles.coder.model).toEqual({
+      id: "copilot/gpt-4o",
+      thinking: { effort: "none" },
+    })
   })
 
   test("ignores model configuration without an id", () => {
@@ -1180,7 +1186,7 @@ profiles:
     expect(getActive()).toHaveLength(0)
   })
 
-  test("throws for unsupported thinking configured in project YAML", () => {
+  test("falls back to the model default when project YAML has unsupported thinking", () => {
     writeConfig(`
 profiles:
   finder:
@@ -1190,9 +1196,12 @@ profiles:
         effort: xhigh
 `)
 
-    expect(() => resolveProfile("finder")).toThrow(
-      'Invalid thinking effort "xhigh" for model "opencode/deepseek-v4-flash". Supported efforts: none, high, max.',
-    )
+    expect(resolveProfile("finder").model?.thinking?.effort).toBe("none")
+    expect(getActive()).toContainEqual(expect.objectContaining({
+      type: "warn",
+      title: "Thinking configuration",
+      message: expect.stringContaining('profiles.finder.model.thinking.effort "xhigh"'),
+    }))
   })
 
   test("invalid sub-agent ID — stripped from result, warn notification fires", () => {

@@ -63,7 +63,14 @@ function parseProfileArg(): string | undefined {
 // Profile-aware agent setup
 // ---------------------------------------------------------------------------
 const profileArg = parseProfileArg()
-const profile = resolveProfile(profileArg)
+let profile
+try {
+  profile = resolveProfile(profileArg)
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`Configuration error: ${message}`)
+  process.exit(1)
+}
 const promptResult = readPromptFile(profile)
 let activeAgent: AgentConfig = agentFromProfile(profile, promptResult.content)
 

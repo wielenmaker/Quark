@@ -2366,5 +2366,101 @@
     "profile": "coder",
     "timeCreated": 1783759177350,
     "timeUpdated": 1783759193218
+  },
+  {
+    "id": "task_5EKcUN3D7m2QP2Tk",
+    "title": "Implement GitHub issue 161",
+    "description": "Implement GitHub issue 161",
+    "profile": "coder",
+    "timeCreated": 1783759333477,
+    "timeUpdated": 1783759337305
+  },
+  {
+    "id": "task_5npa5Rpr3nsGQeI4",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1783763790946,
+    "timeUpdated": 1783763790946
+  },
+  {
+    "id": "task_4nZzB0MGuZ4rzWjL",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1783763790963,
+    "timeUpdated": 1783763790963
+  },
+  {
+    "id": "task_t89pGrFZPYiovVrS",
+    "title": "[Desktop context]",
+    "description": "[Desktop context]",
+    "profile": "coder",
+    "timeCreated": 1783763808062,
+    "timeUpdated": 1783763808062
+  },
+  {
+    "id": "task_hlVuLAzGkY4DBnb5",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1783763808097,
+    "timeUpdated": 1783763808097
+  },
+  {
+    "id": "task_ZDzEip9K5mOM64DI",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1783790690553,
+    "timeUpdated": 1783790694410
+  },
+  {
+    "id": "task_BYJAk7g4sazKQchZ",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1783790690578,
+    "timeUpdated": 1783790693229
+  },
+  {
+    "id": "task_7uyfXyjYH6mX3OoZ",
+    "title": "Config Validation Question",
+    "description": "Config Validation Question",
+    "profile": "coder",
+    "timeCreated": 1783791314546,
+    "timeUpdated": 1783791321261
+  },
+  {
+    "id": "task_wqoPaM5h9KCCSerZ",
+    "title": "Check if the config.yaml and src/config/config.ts files are stale.",
+    "description": "Check if the config.yaml and src/config/config.ts files are stale.",
+    "profile": "coder",
+    "timeCreated": 1783792164772,
+    "timeUpdated": 1783792172223
+  },
+  {
+    "id": "task_neP4hHFwLg5xXDVO",
+    "title": "Explore scripts or processes that set the coder thinking effort to low.",
+    "description": "Explore scripts or processes that set the coder thinking effort to low.",
+    "profile": "coder",
+    "timeCreated": 1783792570845,
+    "timeUpdated": 1783792573243
+  },
+  {
+    "id": "task_MOkvTfQK524thWtz",
+    "title": "Test Oracle Spawn",
+    "description": "Test Oracle Spawn",
+    "profile": "coder",
+    "timeCreated": 1783831182847,
+    "timeUpdated": 1783831187576
+  },
+  {
+    "id": "task_q7SQTA55F4bs9WXe",
+    "title": "Test Request",
+    "description": "Test Request",
+    "profile": "coder",
+    "timeCreated": 1783831368493,
+    "timeUpdated": 1783831372590
   }
 ]

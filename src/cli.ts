@@ -17,6 +17,7 @@ import { agentFromProfile } from "./agent"
 import { bus } from "./session/events"
 import { startEventWriter } from "./session/event-writer"
 import { loadConfig } from "./config/config"
+import { getActive } from "./notification/notification"
 import { setVerbose, debug } from "./debug"
 import { formatArgs } from "./debug/format-tool-args"
 
@@ -31,6 +32,12 @@ const tlogRaw = debug("tool-call:raw")
 // ---------------------------------------------------------------------------
 // Parse CLI arguments
 // ---------------------------------------------------------------------------
+
+function exitForConfigurationError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`Configuration error: ${message}`)
+  process.exit(1)
+}
 
 function printHelp() {
   console.log(`
@@ -161,10 +168,14 @@ async function main() {
   }
 
   if (args.listProfiles) {
-    const profiles = listProfiles()
-    console.log("Available profiles:")
-    for (const p of profiles) {
-      console.log(`  - ${p}`)
+    try {
+      const profiles = listProfiles()
+      console.log("Available profiles:")
+      for (const p of profiles) {
+        console.log(`  - ${p}`)
+      }
+    } catch (error) {
+      exitForConfigurationError(error)
     }
     process.exit(0)
   }
@@ -186,9 +197,20 @@ async function main() {
   }
 
   // Resolve profile
-  const profile = resolveProfile(args.profile)
+  let profile
+  try {
+    profile = resolveProfile(args.profile)
+  } catch (error) {
+    exitForConfigurationError(error)
+  }
   const promptResult = readPromptFile(profile)
   const agent = agentFromProfile(profile, promptResult.content)
+
+  for (const notification of getActive()) {
+    if (notification.type === "warn") {
+      console.error(`${notification.title}: ${notification.message}`)
+    }
+  }
 
   // Bootstrap with profile tools and skills
   await bootstrap({
@@ -277,4 +299,4 @@ async function main() {
   }
 }
 
-main()
+main().catch(exitForConfigurationError)

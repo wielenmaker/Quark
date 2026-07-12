@@ -205,6 +205,11 @@ export function validateThinkingEffort(modelId: string, effort: string): void {
   }
 }
 
+export function getDefaultThinkingEffort(modelId: string): string {
+  const entry = lookupThinkingEntry(modelId)
+  return entry?.levels.includes("none") ? "none" : entry?.levels[0] ?? "none"
+}
+
 /**
  * Get the available effort levels for a model's UI.
  * Returns null if the model doesn't support thinking.
