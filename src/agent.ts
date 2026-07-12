@@ -23,14 +23,12 @@ export interface AgentConfig {
   skills: string[];
   /** Profile IDs of sub-agents this agent can spawn */
   subAgents?: string[];
-  /** Model configuration to use for this agent. Falls back to config `main_model` if omitted. */
-  model?: {
-    id: string;
-    thinking?: {
-      effort: string;
-      mode?: string;
-    };
-  };
+  /** Model string to use for this agent. Falls back to config `main_model` if omitted. */
+  model?: string;
+  /** Thinking effort for this agent's effective model. */
+  thinkingEffort?: string;
+  /** Optional reasoning mode for models that support it. */
+  thinkingMode?: string;
   /** Permission rules for this agent's tools.
    *  Each rule matches a tool ID and specifies whether to allow, deny, or ask.
    *  Rules are evaluated with last-match-wins semantics.
@@ -71,6 +69,8 @@ export function agentFromProfile(
     skills: profile.skills,
     subAgents: profile.subAgents,
     model: profile.model,
+    thinkingEffort: profile.thinkingEffort,
+    thinkingMode: profile.thinkingMode,
     permissions: profile.permissions,
   };
 }

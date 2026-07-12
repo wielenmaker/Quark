@@ -74,10 +74,8 @@ describe("CLI with invalid thinking config (issue #166)", () => {
     writeProjectConfig(`
 profiles:
   finder:
-    model:
-      id: opencode/deepseek-v4-flash
-      thinking:
-        effort: xhigh
+    model: opencode/deepseek-v4-flash
+    thinking_effort: xhigh
 `)
 
     const result = runCli(["--profile", "finder", "--prompt", "hello"])
@@ -92,10 +90,8 @@ profiles:
     writeProjectConfig(`
 profiles:
   bad:
-    model:
-      id: copilot/gpt-4o
-      thinking:
-        effort: high
+    model: copilot/gpt-4o
+    thinking_effort: high
 `)
 
     const result = runCli(["--profile", "bad", "--prompt", "hello"])
@@ -114,10 +110,8 @@ profiles:
     writeProjectConfig(`
 profiles:
   finder:
-    model:
-      id: opencode/deepseek-v4-pro
-      thinking:
-        effort: high
+    model: opencode/deepseek-v4-pro
+    thinking_effort: high
 `)
 
     const result = runCli(["--profile", "finder", "--prompt", "hello"])
@@ -135,10 +129,8 @@ profiles:
     writeProjectConfig(`
 profiles:
   badprofile:
-    model:
-      id: opencode/deepseek-v4-flash
-      thinking:
-        effort: xhigh
+    model: opencode/deepseek-v4-flash
+    thinking_effort: xhigh
 `)
 
     const result = runCli(["--profile", "coder", "--prompt", "hello"])
@@ -147,7 +139,7 @@ profiles:
 
     expect(result.exitCode).toBe(0)
     expect(stderr).toContain("Thinking configuration")
-    expect(stderr).toContain("profiles.badprofile.model.thinking.effort")
+    expect(stderr).toContain("profiles.badprofile.thinking_effort")
     expect(stderr).toContain('Using default "none"')
     expect(stderr).not.toContain("at validateThinkingEffort")
   })

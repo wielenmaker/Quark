@@ -3,8 +3,8 @@
 //
 // Each model entry is self-describing: it declares its own
 // effort levels, field names, and toggle/adaptive fields.
-// No modes, no effort normalization — the API fields are
-// whatever the model actually requires.
+// No effort normalization — the API fields are whatever the
+// model actually requires.
 
 import type { JSONObject } from "@ai-sdk/provider"
 
@@ -217,6 +217,15 @@ export function getDefaultThinkingEffort(modelId: string): string {
 export function getThinkingLevels(modelId: string): string[] | null {
   const entry = lookupThinkingEntry(modelId)
   return entry ? entry.levels : null
+}
+
+/**
+ * Get the available reasoning modes for a model.
+ * Returns null when the model does not support explicit modes.
+ */
+export function getThinkingModes(modelId: string): string[] | null {
+  const modes = lookupThinkingEntry(modelId)?.modes
+  return modes ? [...modes] : null
 }
 
 // ---------------------------------------------------------------------------

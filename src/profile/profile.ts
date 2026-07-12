@@ -20,7 +20,12 @@ import * as os from "os"
 import { parse as parseYAML, stringify as stringifyYAML } from "yaml"
 import { warn as notifyWarn } from "../notification/notification"
 import { type Action } from "../permission/permission"
-import { getDefaultThinkingEffort, validateThinkingEffort } from "../provider/thinking"
+import { loadConfig } from "../config/config"
+import {
+  getDefaultThinkingEffort,
+  getThinkingModes,
+  validateThinkingEffort,
+} from "../provider/thinking"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,14 +49,12 @@ export interface ProfileDef {
   skills: string[]
   /** Profile IDs of sub-agents this profile can spawn */
   subAgents?: string[]
-  /** Model configuration for this profile. Falls back to config `main_model` if omitted. */
-  model?: {
-    id: string
-    thinking?: {
-      effort: string
-      mode?: string
-    }
-  }
+  /** Model string for this profile. Falls back to config `main_model` if omitted. */
+  model?: string
+  /** Thinking effort for this profile's effective model. */
+  thinkingEffort?: string
+  /** Optional reasoning mode for models that support it. */
+  thinkingMode?: string
   /** Permission rules for this profile's tools.
    *  Each rule matches a tool ID and specifies whether to allow, deny, or ask.
    *  Rules are evaluated with last-match-wins semantics.
@@ -121,7 +124,11 @@ function parsePermissions(raw: unknown): Array<{ tool: string; action: Action }>
   return result.length > 0 ? result : undefined
 }
 
-function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string): Record<string, ProfileDef> {
+function parseProfilesFromYAML(
+  raw: Record<string, unknown>,
+  configDir: string,
+  fallbackModel?: string,
+): Record<string, ProfileDef> {
   const profiles: Record<string, ProfileDef> = {}
 
   const rawProfiles = raw.profiles as Record<string, unknown> | undefined
@@ -130,6 +137,14 @@ function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string):
   for (const [id, val] of Object.entries(rawProfiles)) {
     if (!val || typeof val !== "object") continue
     const p = val as Record<string, unknown>
+    const parsedModel = parseModel(p.model, id)
+    const thinking = parseThinking(
+      p,
+      parsedModel.legacyThinking,
+      parsedModel.model,
+      id,
+      fallbackModel,
+    )
 
     profiles[id] = {
       id,
@@ -138,7 +153,8 @@ function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string):
       tools: Array.isArray(p.tools) ? (p.tools as string[]) : BUILTIN_CODER.tools,
       skills: Array.isArray(p.skills) ? (p.skills as string[]) : [],
       subAgents: Array.isArray(p.sub_agents) ? (p.sub_agents as string[]) : undefined,
-      model: parseModel(p.model, id),
+      ...(parsedModel.model ? { model: parsedModel.model } : {}),
+      ...thinking,
       permissions: parsePermissions(p.permissions),
     }
   }
@@ -146,42 +162,92 @@ function parseProfilesFromYAML(raw: Record<string, unknown>, configDir: string):
   return profiles
 }
 
-function parseModel(raw: unknown, profileId?: string): ProfileDef["model"] | undefined {
-  if (typeof raw === "string" && raw) return { id: raw }
-  if (!raw || typeof raw !== "object") return undefined
+function parseModel(
+  raw: unknown,
+  profileId: string,
+): { model?: string; legacyThinking?: Record<string, unknown> } {
+  if (typeof raw === "string" && raw) return { model: raw }
+  if (!raw || typeof raw !== "object") return {}
+
   const value = raw as Record<string, unknown>
-  if (typeof value.id !== "string" || !value.id) return undefined
-  const thinking = parseThinking(value.thinking, value.id, profileId)
+  notifyWarn(
+    "Profile configuration",
+    `profiles.${profileId}.model uses the deprecated nested format. Use model, thinking_effort, and thinking_mode as sibling profile fields.`,
+    0,
+  )
+
   return {
-    id: value.id,
-    ...(thinking ? { thinking } : {}),
+    ...(typeof value.id === "string" && value.id ? { model: value.id } : {}),
+    ...(value.thinking && typeof value.thinking === "object"
+      ? { legacyThinking: value.thinking as Record<string, unknown> }
+      : {}),
   }
 }
 
 function parseThinking(
-  raw: unknown,
-  modelId?: string,
-  profileId?: string,
-): NonNullable<ProfileDef["model"]>["thinking"] | undefined {
-  if (!raw || typeof raw !== "object") return undefined
-  const value = raw as Record<string, unknown>
-  if (typeof value.effort !== "string" || !value.effort) return undefined
-  try {
-    if (modelId) validateThinkingEffort(modelId, value.effort)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const fallback = getDefaultThinkingEffort(modelId ?? "")
-    notifyWarn(
-      "Thinking configuration",
-      `profiles.${profileId}.model.thinking.effort "${value.effort}" is invalid for "${modelId}". Using default "${fallback}". ${message}`,
-      0,
-    )
-    return { effort: fallback }
+  profile: Record<string, unknown>,
+  legacy: Record<string, unknown> | undefined,
+  modelId: string | undefined,
+  profileId: string,
+  fallbackModel?: string,
+): Pick<ProfileDef, "thinkingEffort" | "thinkingMode"> {
+  const flatEffort = typeof profile.thinking_effort === "string" && profile.thinking_effort
+    ? profile.thinking_effort
+    : undefined
+  const legacyEffort = typeof legacy?.effort === "string" && legacy.effort
+    ? legacy.effort
+    : undefined
+  const effort = flatEffort ?? legacyEffort
+
+  const flatMode = typeof profile.thinking_mode === "string" && profile.thinking_mode
+    ? profile.thinking_mode
+    : undefined
+  const legacyMode = legacyEffort && typeof legacy?.mode === "string" && legacy.mode
+    ? legacy.mode
+    : undefined
+  const mode = flatMode ?? legacyMode
+
+  if (!effort && !mode) return {}
+
+  const effectiveModel = modelId ?? fallbackModel ?? loadConfig().main_model
+  const result: Pick<ProfileDef, "thinkingEffort" | "thinkingMode"> = {}
+
+  if (effort) {
+    try {
+      validateThinkingEffort(effectiveModel, effort)
+      result.thinkingEffort = effort
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const fallback = getDefaultThinkingEffort(effectiveModel)
+      notifyWarn(
+        "Thinking configuration",
+        `profiles.${profileId}.thinking_effort "${effort}" is invalid for "${effectiveModel}". Using default "${fallback}". ${message}`,
+        0,
+      )
+      result.thinkingEffort = fallback
+    }
   }
-  return {
-    effort: value.effort,
-    ...(typeof value.mode === "string" && value.mode ? { mode: value.mode } : {}),
+
+  if (mode) {
+    const modes = getThinkingModes(effectiveModel)
+    if (!modes) {
+      notifyWarn(
+        "Thinking configuration",
+        `profiles.${profileId}.thinking_mode "${mode}" is not supported by "${effectiveModel}". Ignoring it.`,
+        0,
+      )
+    } else if (!modes.includes(mode)) {
+      notifyWarn(
+        "Thinking configuration",
+        `profiles.${profileId}.thinking_mode "${mode}" is invalid for "${effectiveModel}". Supported modes: ${modes.join(", ")}. Ignoring it.`,
+        0,
+      )
+    } else {
+      result.thinkingMode = mode
+    }
   }
+
+  return result
 }
 
 function resolvePromptPath(promptFile: string, configDir: string): string {
@@ -251,9 +317,7 @@ export function loadProfileConfig(): ProfileConfig {
       for (const [id, prof] of Object.entries(profiles)) {
         merged[id] = prof
       }
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("Thinking ")) throw error
-      if (error instanceof Error && error.message.startsWith("Invalid thinking effort ")) throw error
+    } catch {
       // Skip invalid config files
     }
   }
@@ -418,7 +482,32 @@ export function listProfiles(): string[] {
  * Clear the cached profile config.
  * Call after the `/profile` switch command or when config files change at runtime.
  */
-export function setProfileThinking(profileId: string, thinking: NonNullable<ProfileDef["model"]>["thinking"]): void {
+type ProfileThinking = { effort: string; mode?: string }
+
+function updateProfileThinking(
+  profile: Record<string, unknown>,
+  thinking: ProfileThinking,
+): Record<string, unknown> {
+  const updated = { ...profile }
+  if (updated.model && typeof updated.model === "object") {
+    const legacyModel = updated.model as Record<string, unknown>
+    if (typeof legacyModel.id === "string" && legacyModel.id) {
+      updated.model = legacyModel.id
+    } else {
+      delete updated.model
+    }
+  }
+
+  updated.thinking_effort = thinking.effort
+  if (thinking.mode) {
+    updated.thinking_mode = thinking.mode
+  } else {
+    delete updated.thinking_mode
+  }
+  return updated
+}
+
+export function setProfileThinking(profileId: string, thinking: ProfileThinking): void {
   const configPath = path.join(globalConfigDir(), "config.yaml")
   let raw: Record<string, unknown> = {}
   try {
@@ -433,11 +522,7 @@ export function setProfileThinking(profileId: string, thinking: NonNullable<Prof
   const profile = profiles[profileId] && typeof profiles[profileId] === "object"
     ? profiles[profileId] as Record<string, unknown>
     : {}
-  const model = profile.model && typeof profile.model === "object"
-    ? profile.model as Record<string, unknown>
-    : {}
-  if (typeof model.id !== "string" || !model.id) return
-  profiles[profileId] = { ...profile, model: { id: model.id, ...(thinking ? { thinking } : {}) } }
+  profiles[profileId] = updateProfileThinking(profile, thinking)
   raw.profiles = profiles
 
   fs.mkdirSync(globalConfigDir(), { recursive: true })
@@ -458,6 +543,7 @@ export const _internal = {
   parsePermissions,
   parseModel,
   parseThinking,
+  updateProfileThinking,
   validateSubAgents,
   BUILTIN_CODER,
   BUILTIN_PROMPT,

@@ -219,7 +219,9 @@ async function loop(
   // Build the AI SDK model
   // Priority: explicit modelOpt > agent model > config main_model
   // Model is always in "provider/model" format.
-  const modelSpec = modelOpt ?? agent.model?.id ?? loadConfig().main_model;
+  const agentModelSpec = agent.model ?? loadConfig().main_model;
+  const modelSpec = modelOpt ?? agentModelSpec;
+  const usingAgentModel = modelOpt === undefined || modelOpt === agentModelSpec;
   const parsedModel = parseModelSpec(modelSpec);
   const effectiveModel = parsedModel.model;
   const effectiveProvider = parsedModel.provider;
@@ -329,9 +331,9 @@ async function loop(
     const providerId = effectiveProvider;
     const thinkingNormalizer = getThinkingNormalizer(effectiveModel)
     thinkingNormalizer.configure({
-      effort: agent.model?.thinking?.effort ?? "none",
-      mode: agent.model?.thinking?.mode ?? "standard",
-      modeExplicit: agent.model?.thinking?.mode !== undefined,
+      effort: usingAgentModel ? agent.thinkingEffort ?? "none" : "none",
+      mode: usingAgentModel ? agent.thinkingMode ?? "standard" : "standard",
+      modeExplicit: usingAgentModel && agent.thinkingMode !== undefined,
     })
     const thinkingProviderOptions = thinkingNormalizer.normalize(providerId ?? "");
     const result = await processStream({

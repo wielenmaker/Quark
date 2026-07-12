@@ -124,11 +124,8 @@ max_steps: 100
 # Per-agent model configuration
 profiles:
   coder:
-    model:
-      id: codex/gpt-5.6-luna
-      thinking:
-        effort: high
-        mode: pro
+    model: codex/gpt-5.6-luna
+    thinking_effort: high
 
 # Auto-branch when the context window fills up
 branching:
@@ -141,6 +138,14 @@ providers:
     baseURL: http://localhost:11434/v1
     apiKey: "env:OLLAMA_API_KEY"   # literal value, or "env:VAR" to read from env
 ```
+
+Some models support an additional reasoning mode. For those models—currently
+the GPT-5.6 family—set `thinking_mode: pro` alongside `thinking_effort`. Quark
+warns and ignores the setting when the selected model does not support modes.
+
+Older profile configs using `model: { id, thinking: { effort, mode } }` are
+still accepted for migration. New and updated profile settings are written in
+the flat form shown above.
 
 Per-project overrides go in `.quark/config.yaml` at the repo root.
 

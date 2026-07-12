@@ -422,7 +422,7 @@ async function handlePrompt(
   const agent = agentByProfile.get(profileId) ?? resolvedAgent
 
   // Pick model: session override → agent config → default
-  const model = state.model ?? agent.model?.id ?? defaultModel
+  const model = state.model ?? agent.model ?? defaultModel
 
   const { parts, images } = convertContentBlocks(blocks)
 

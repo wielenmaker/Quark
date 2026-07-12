@@ -1071,11 +1071,11 @@ export const App: Component<AppProps> = (props) => {
       dispatch(state, { type: "cycle-thinking", modelId: state.store.status.modelName })
       const effort = state.store.thinkingEffort
       const profile = resolveProfile(props.getCurrentProfile?.())
-      setProfileThinking(profile.id, { effort, mode: profile.model?.thinking?.mode })
+      setProfileThinking(profile.id, { effort, mode: profile.thinkingMode })
       getThinkingNormalizer(state.store.status.modelName).configure({
         effort,
-        mode: profile.model?.thinking?.mode ?? "standard",
-        modeExplicit: profile.model?.thinking?.mode !== undefined,
+        mode: profile.thinkingMode ?? "standard",
+        modeExplicit: profile.thinkingMode !== undefined,
       })
       evt.preventDefault()
       return

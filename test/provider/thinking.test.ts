@@ -1,5 +1,11 @@
 import { describe, test, expect } from "bun:test"
-import { getDefaultThinkingEffort, getThinkingNormalizer, getThinkingLevels, resetThinkingNormalizer } from "../../src/provider/thinking"
+import {
+  getDefaultThinkingEffort,
+  getThinkingLevels,
+  getThinkingModes,
+  getThinkingNormalizer,
+  resetThinkingNormalizer,
+} from "../../src/provider/thinking"
 
 import { beforeEach } from "bun:test"
 
@@ -63,6 +69,17 @@ describe("getThinkingLevels", () => {
   test("returns effort levels for gpt-5.6-sol", () => {
     const levels = getThinkingLevels("gpt-5.6-sol")
     expect(levels).toEqual(["none", "low", "medium", "high", "xhigh", "max"])
+  })
+})
+
+describe("getThinkingModes", () => {
+  test("returns explicit modes for gpt-5.6 models", () => {
+    expect(getThinkingModes("codex/gpt-5.6-luna")).toEqual(["standard", "pro"])
+  })
+
+  test("returns null for models without explicit modes", () => {
+    expect(getThinkingModes("copilot/gpt-5")).toBeNull()
+    expect(getThinkingModes("unknown-model")).toBeNull()
   })
 })
 

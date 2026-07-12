@@ -197,6 +197,18 @@ describe("loadConfig", () => {
     expect(config.small_model).toBe("tiny-model")
     expect(config.main_model).toBe("big-model")
   })
+
+  test("does not expose top-level thinking fields as global defaults", () => {
+    writeConfig({
+      main_model: "copilot/gpt-5",
+      thinking_effort: "high",
+      thinking_mode: "pro",
+    })
+
+    const config = loadConfig() as unknown as Record<string, unknown>
+    expect(config.thinking_effort).toBeUndefined()
+    expect(config.thinking_mode).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

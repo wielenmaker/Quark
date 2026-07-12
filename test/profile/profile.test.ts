@@ -18,7 +18,14 @@ import {
 import { agentFromProfile } from "../../src/agent"
 import { getActive, dismiss } from "../../src/notification/notification"
 
-const { parseProfilesFromYAML, parseProjectOverrides, parsePermissions, BUILTIN_CODER, BUILTIN_PROMPT } = _internal
+const {
+  parseProfilesFromYAML,
+  parseProjectOverrides,
+  parsePermissions,
+  updateProfileThinking,
+  BUILTIN_CODER,
+  BUILTIN_PROMPT,
+} = _internal
 
 
 // ---------------------------------------------------------------------------
@@ -143,9 +150,15 @@ describe("agentFromProfile", () => {
     const profile = {
       ...BUILTIN_CODER,
       skills: ["test-skill"],
+      model: "codex/gpt-5.6-luna",
+      thinkingEffort: "high",
+      thinkingMode: "pro",
     }
     const agent = agentFromProfile(profile, "test")
     expect(agent.skills).toEqual(["test-skill"])
+    expect(agent.model).toBe("codex/gpt-5.6-luna")
+    expect(agent.thinkingEffort).toBe("high")
+    expect(agent.thinkingMode).toBe("pro")
   })
 })
 
@@ -184,6 +197,14 @@ describe("loadProfileConfig", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseProfilesFromYAML", () => {
+  beforeEach(() => {
+    for (const notification of getActive()) dismiss(notification.id)
+  })
+
+  afterEach(() => {
+    for (const notification of getActive()) dismiss(notification.id)
+  })
+
   test("parses a complete profile definition", () => {
     const raw = {
       profiles: {
@@ -344,70 +365,152 @@ describe("parseProfilesFromYAML", () => {
     expect(profiles.valid).toBeDefined()
   })
 
-  test("parses thinking under a profile model", () => {
+  test("parses flat thinking fields beside a profile model", () => {
     const raw = {
       profiles: {
         coder: {
-          model: {
-            id: "codex/gpt-5.6-luna",
-            thinking: { effort: "high", mode: "pro" },
-          },
+          model: "codex/gpt-5.6-luna",
+          thinking_effort: "high",
+          thinking_mode: "pro",
         },
       },
     }
 
     const profiles = parseProfilesFromYAML(raw, "/tmp")
-    expect(profiles.coder.model).toEqual({
-      id: "codex/gpt-5.6-luna",
-      thinking: { effort: "high", mode: "pro" },
-    })
+    expect(profiles.coder.model).toBe("codex/gpt-5.6-luna")
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBe("pro")
   })
 
-  test("ignores model thinking without an effort", () => {
-    const profiles = parseProfilesFromYAML({ profiles: { coder: { model: { id: "codex/gpt-5.6", thinking: { mode: "pro" } } } } }, "/tmp")
-    expect(profiles.coder.model).toEqual({ id: "codex/gpt-5.6" })
+  test("parses the common effort-only form without adding a mode", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: "codex/gpt-5.6",
+          thinking_effort: "high",
+        },
+      },
+    }, "/tmp")
+    expect(profiles.coder.model).toBe("codex/gpt-5.6")
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBeUndefined()
+  })
+
+  test("reads the deprecated nested form into the flat runtime shape", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: {
+            id: "codex/gpt-5.6",
+            thinking: { effort: "high", mode: "pro" },
+          },
+        },
+      },
+    }, "/tmp")
+
+    expect(profiles.coder.model).toBe("codex/gpt-5.6")
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBe("pro")
+    expect(getActive()).toContainEqual(expect.objectContaining({
+      type: "warn",
+      title: "Profile configuration",
+      message: expect.stringContaining("deprecated nested format"),
+    }))
+  })
+
+  test("prefers flat thinking fields over deprecated nested fields", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: {
+            id: "codex/gpt-5.6",
+            thinking: { effort: "low", mode: "standard" },
+          },
+          thinking_effort: "high",
+          thinking_mode: "pro",
+        },
+      },
+    }, "/tmp")
+
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBe("pro")
   })
 
   test("falls back to the model default for an effort unsupported by the profile model", () => {
     const profiles = parseProfilesFromYAML({
       profiles: {
         coder: {
-          model: {
-            id: "opencode/deepseek-v4-flash",
-            thinking: { effort: "xhigh" },
-          },
+          model: "opencode/deepseek-v4-flash",
+          thinking_effort: "xhigh",
         },
       },
     }, "/tmp")
-    expect(profiles.coder.model).toEqual({
-      id: "opencode/deepseek-v4-flash",
-      thinking: { effort: "none" },
-    })
+    expect(profiles.coder.model).toBe("opencode/deepseek-v4-flash")
+    expect(profiles.coder.thinkingEffort).toBe("none")
   })
 
   test("falls back to none when the profile model does not support thinking", () => {
     const profiles = parseProfilesFromYAML({
       profiles: {
         coder: {
-          model: {
-            id: "copilot/gpt-4o",
-            thinking: { effort: "high" },
-          },
+          model: "copilot/gpt-4o",
+          thinking_effort: "high",
         },
       },
     }, "/tmp")
-    expect(profiles.coder.model).toEqual({
-      id: "copilot/gpt-4o",
-      thinking: { effort: "none" },
-    })
+    expect(profiles.coder.model).toBe("copilot/gpt-4o")
+    expect(profiles.coder.thinkingEffort).toBe("none")
   })
 
-  test("ignores model configuration without an id", () => {
-    const profiles = parseProfilesFromYAML({ profiles: { coder: { model: { thinking: { effort: "high" } } } } }, "/tmp")
+  test("validates thinking against the fallback model when model is omitted", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: { coder: { thinking_effort: "high" } },
+    }, "/tmp", "copilot/gpt-5")
     expect(profiles.coder.model).toBeUndefined()
+    expect(profiles.coder.thinkingEffort).toBe("high")
   })
 
-  test("parses legacy string model field", () => {
+  test("warns and drops thinking_mode for a model without mode support", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: "copilot/gpt-5",
+          thinking_effort: "high",
+          thinking_mode: "pro",
+        },
+      },
+    }, "/tmp")
+
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBeUndefined()
+    expect(getActive()).toContainEqual(expect.objectContaining({
+      type: "warn",
+      title: "Thinking configuration",
+      message: expect.stringContaining('thinking_mode "pro" is not supported'),
+    }))
+  })
+
+  test("warns and drops an invalid mode for a model with mode support", () => {
+    const profiles = parseProfilesFromYAML({
+      profiles: {
+        coder: {
+          model: "codex/gpt-5.6",
+          thinking_effort: "high",
+          thinking_mode: "ultra",
+        },
+      },
+    }, "/tmp")
+
+    expect(profiles.coder.thinkingEffort).toBe("high")
+    expect(profiles.coder.thinkingMode).toBeUndefined()
+    expect(getActive()).toContainEqual(expect.objectContaining({
+      type: "warn",
+      title: "Thinking configuration",
+      message: expect.stringContaining("Supported modes: standard, pro"),
+    }))
+  })
+
+  test("parses string model field", () => {
     const raw = {
       profiles: {
         researcher: {
@@ -418,7 +521,7 @@ describe("parseProfilesFromYAML", () => {
     }
 
     const profiles = parseProfilesFromYAML(raw, "/tmp")
-    expect(profiles.researcher.model).toEqual({ id: "claude-sonnet-4.5" })
+    expect(profiles.researcher.model).toBe("claude-sonnet-4.5")
   })
 
   test("model field is undefined when not specified", () => {
@@ -432,6 +535,44 @@ describe("parseProfilesFromYAML", () => {
 
     const profiles = parseProfilesFromYAML(raw, "/tmp")
     expect(profiles.coder.model).toBeUndefined()
+  })
+})
+
+describe("updateProfileThinking", () => {
+  test("writes flat fields and migrates a deprecated nested model", () => {
+    const updated = updateProfileThinking({
+      name: "Coder",
+      model: {
+        id: "codex/gpt-5.6-luna",
+        thinking: { effort: "low", mode: "standard" },
+      },
+    }, { effort: "high", mode: "pro" })
+
+    expect(updated).toEqual({
+      name: "Coder",
+      model: "codex/gpt-5.6-luna",
+      thinking_effort: "high",
+      thinking_mode: "pro",
+    })
+  })
+
+  test("removes a stale mode when it is omitted", () => {
+    const updated = updateProfileThinking({
+      model: "copilot/gpt-5",
+      thinking_effort: "high",
+      thinking_mode: "pro",
+    }, { effort: "none" })
+
+    expect(updated).toEqual({
+      model: "copilot/gpt-5",
+      thinking_effort: "none",
+    })
+  })
+
+  test("allows thinking settings without an explicit profile model", () => {
+    expect(updateProfileThinking({}, { effort: "high" })).toEqual({
+      thinking_effort: "high",
+    })
   })
 })
 
@@ -1183,24 +1324,22 @@ profiles:
 `)
     const profile = resolveProfile("orchestrator")
     expect(profile.subAgents).toEqual(["researcher", "worker"])
-    expect(getActive()).toHaveLength(0)
+    expect(getActive().filter((notification) => notification.title === "Profile")).toHaveLength(0)
   })
 
   test("falls back to the model default when project YAML has unsupported thinking", () => {
     writeConfig(`
 profiles:
   finder:
-    model:
-      id: opencode/deepseek-v4-flash
-      thinking:
-        effort: xhigh
+    model: opencode/deepseek-v4-flash
+    thinking_effort: xhigh
 `)
 
-    expect(resolveProfile("finder").model?.thinking?.effort).toBe("none")
+    expect(resolveProfile("finder").thinkingEffort).toBe("none")
     expect(getActive()).toContainEqual(expect.objectContaining({
       type: "warn",
       title: "Thinking configuration",
-      message: expect.stringContaining('profiles.finder.model.thinking.effort "xhigh"'),
+      message: expect.stringContaining('profiles.finder.thinking_effort "xhigh"'),
     }))
   })
 
@@ -1217,7 +1356,7 @@ profiles:
     // "research" is not a profile ID — only "researcher" is
     expect(profile.subAgents).toEqual([])
 
-    const active = getActive()
+    const active = getActive().filter((notification) => notification.title === "Profile")
     expect(active).toHaveLength(1)
     expect(active[0]!.type).toBe("warn")
     expect(active[0]!.title).toBe("Profile")
@@ -1237,7 +1376,7 @@ profiles:
     const profile = resolveProfile("orchestrator")
     expect(profile.subAgents).toEqual([])
 
-    const active = getActive()
+    const active = getActive().filter((notification) => notification.title === "Profile")
     expect(active).toHaveLength(1)
     expect(active[0]!.message).toContain("sub-agents:")
     expect(active[0]!.message).toContain("badname1")
@@ -1258,7 +1397,7 @@ profiles:
     const profile = resolveProfile("orchestrator")
     expect(profile.subAgents).toEqual(["researcher", "worker"])
 
-    const active = getActive()
+    const active = getActive().filter((notification) => notification.title === "Profile")
     expect(active).toHaveLength(1)
     // Notification names only the invalid IDs, not the valid ones
     expect(active[0]!.message).toContain("typo")
@@ -1272,7 +1411,7 @@ profiles:
     const profile = resolveProfile("coder")
     // Just verify it's a valid profile with the expected id
     expect(profile.id).toBe("coder")
-    expect(getActive()).toHaveLength(0)
+    expect(getActive().filter((notification) => notification.title === "Profile")).toHaveLength(0)
   })
 })
 
