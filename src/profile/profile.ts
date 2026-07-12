@@ -56,11 +56,10 @@ export interface ProfileDef {
   /** Optional reasoning mode for models that support it. */
   thinkingMode?: string
   /** Permission rules for this profile's tools.
-   *  Each rule matches a tool ID and specifies whether to allow, deny, or ask.
-   *  Rules are evaluated with last-match-wins semantics.
-   *
-   *  TODO: later support argument-level permission via a `pattern` field. */
-  permissions?: Array<{ tool: string; action: Action }>
+   *  Each rule matches a tool ID and an optional file-path pattern,
+   *  and specifies whether to allow, deny, or ask.
+   *  Rules are evaluated with last-match-wins semantics. */
+  permissions?: Array<{ tool: string; pattern?: string; action: Action }>
 }
 
 /**
@@ -111,15 +110,19 @@ function configPaths(): string[] {
 // YAML config parsing
 // ---------------------------------------------------------------------------
 
-function parsePermissions(raw: unknown): Array<{ tool: string; action: Action }> | undefined {
+function parsePermissions(raw: unknown): Array<{ tool: string; pattern?: string; action: Action }> | undefined {
   if (!Array.isArray(raw)) return undefined
-  const result: Array<{ tool: string; action: Action }> = []
+  const result: Array<{ tool: string; pattern?: string; action: Action }> = []
   for (const item of raw) {
     if (!item || typeof item !== "object") continue
     const r = item as Record<string, unknown>
     if (typeof r.tool !== "string" || !r.tool) continue
     if (r.action !== "allow" && r.action !== "deny" && r.action !== "ask") continue
-    result.push({ tool: r.tool, action: r.action as Action })
+    result.push({
+      tool: r.tool,
+      pattern: typeof r.pattern === "string" && r.pattern.length > 0 ? r.pattern : undefined,
+      action: r.action as Action,
+    })
   }
   return result.length > 0 ? result : undefined
 }

@@ -30,11 +30,10 @@ export interface AgentConfig {
   /** Optional reasoning mode for models that support it. */
   thinkingMode?: string;
   /** Permission rules for this agent's tools.
-   *  Each rule matches a tool ID and specifies whether to allow, deny, or ask.
-   *  Rules are evaluated with last-match-wins semantics.
-   *
-   *  TODO: later support argument-level permission via a `pattern` field. */
-  permissions?: Array<{ tool: string; action: Action }>;
+   *  Each rule matches a tool ID and an optional file-path pattern,
+   *  and specifies whether to allow, deny, or ask.
+   *  Rules are evaluated with last-match-wins semantics. */
+  permissions?: Array<{ tool: string; pattern?: string; action: Action }>;
 }
 
 /**

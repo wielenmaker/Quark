@@ -22,7 +22,7 @@ export function resolveToolSet(
   const defs = resolveAvailable([...agent.tools])
   const ruleset: Ruleset = (agent.permissions ?? []).map((r) => ({
     tool: r.tool,
-    pattern: "*",
+    pattern: r.pattern ?? "*",
     action: r.action,
   }))
   const result: ToolSet = {}
@@ -69,20 +69,6 @@ function toAITool(
       const callId = options.toolCallId
       const abortSig = options.abortSignal ?? abort
 
-      try {
-        await askPermission({
-          sessionId,
-          tool: def.id,
-          pattern: "*",
-          ruleset,
-        })
-      } catch (e) {
-        if (e instanceof RejectedError || e instanceof CorrectedError) {
-          bus.emit("permission-rejected", { sessionId })
-        }
-        throw e
-      }
-
       const parseResult = def.parameters.safeParse(args)
       if (!parseResult.success) {
         const msg = parseResult.error.issues
@@ -95,6 +81,24 @@ function toAITool(
         }
       }
       const validatedArgs = parseResult.data as Record<string, unknown>
+
+      // Derive the resource path for permission evaluation:
+      // file-modifying tools use the target file path; everything else uses "*".
+      const resourcePath = extractFilePath(def.id, validatedArgs) ?? "*"
+
+      try {
+        await askPermission({
+          sessionId,
+          tool: def.id,
+          pattern: resourcePath,
+          ruleset,
+        })
+      } catch (e) {
+        if (e instanceof RejectedError || e instanceof CorrectedError) {
+          bus.emit("permission-rejected", { sessionId })
+        }
+        throw e
+      }
 
       try {
         const fp = extractFilePath(def.id, validatedArgs)

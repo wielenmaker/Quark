@@ -11,9 +11,10 @@
 //
 // Both are stored under the current turn's user message ID.
 
+import { createHash } from "node:crypto";
 import { mkdir, cp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, dirname, relative, isAbsolute } from "node:path";
+import { join, dirname, relative, resolve } from "node:path";
 import { getSessionStorageRoot } from "../storage/session-path";
 import { rewriteJSONL } from "../storage/session-jsonl";
 
@@ -40,7 +41,8 @@ function trackerPath(sessionId: string): string {
 interface TurnEntry {
   /** User message ID — the turn identifier */
   messageId: string;
-  /** Relative (from cwd) paths of files touched in this turn */
+  /** Absolute paths of files touched in this turn.
+   *  Legacy entries may store relative paths — resolved against cwd on load. */
   files: string[];
 }
 
@@ -79,6 +81,10 @@ function loadTracker(sessionId: string): TrackerData {
   try {
     const raw = require("node:fs").readFileSync(p, "utf-8");
     const data = JSON.parse(raw) as TrackerData;
+    // Normalize legacy relative paths to absolute paths
+    for (const turn of data.turns) {
+      turn.files = turn.files.map((f) => resolve(process.cwd(), f));
+    }
     trackerCache.set(sessionId, data);
     return data;
   } catch {
@@ -100,12 +106,19 @@ async function saveTracker(sessionId: string, data: TrackerData): Promise<void> 
 // ---------------------------------------------------------------------------
 
 /**
- * Convert an absolute file path to one relative to cwd.
- * Returns null if the file is outside the workspace.
+ * Derive a safe snapshot key from an absolute file path.
+ * Uses SHA-256 to avoid path-traversal risks and collisions.
  */
-function toRelPath(absPath: string): string | null {
+function snapshotKey(absPath: string): string {
+  return createHash("sha256").update(absPath).digest("hex");
+}
+
+/**
+ * Return a display-friendly path: relative if inside cwd, absolute otherwise.
+ */
+function displayPath(absPath: string): string {
   const rel = relative(process.cwd(), absPath);
-  if (rel.startsWith("..") || isAbsolute(rel)) return null;
+  if (rel.startsWith("..") || resolve(rel) !== resolve(process.cwd(), rel)) return absPath;
   return rel;
 }
 
@@ -116,18 +129,19 @@ function toRelPath(absPath: string): string | null {
 /**
  * Snapshot a single file into the undo directory for a given turn.
  * Only snapshots files that currently exist (skip files about to be created).
+ * Uses SHA-256 of the absolute path as the snapshot key to safely handle
+ * files anywhere on disk (inside or outside cwd).
  */
 async function snapshotFile(
   sessionId: string,
   messageId: string,
-  relPath: string,
+  absPath: string,
 ): Promise<void> {
-  const src = join(process.cwd(), relPath);
-  if (!existsSync(src)) return;
+  if (!existsSync(absPath)) return;
 
-  const dest = join(undoDir(sessionId, messageId), relPath);
+  const dest = join(undoDir(sessionId, messageId), snapshotKey(absPath));
   await mkdir(dirname(dest), { recursive: true });
-  await cp(src, dest);
+  await cp(absPath, dest);
 }
 
 /**
@@ -138,12 +152,15 @@ export async function takeSnapshot(
   messageId: string,
   files: string[],
 ): Promise<void> {
-  await Promise.all(files.map((f) => snapshotFile(sessionId, messageId, f)));
+  await Promise.all(
+    files.map((f) => snapshotFile(sessionId, messageId, resolve(process.cwd(), f))),
+  );
 }
 
 /**
  * Restore files from a snapshot and clean up.
  * Returns a summary of what was restored and deleted.
+ * Files inside cwd are displayed as relative paths; external files as absolute.
  */
 export async function restoreFromSnapshot(
   sessionId: string,
@@ -158,20 +175,19 @@ export async function restoreFromSnapshot(
   const turn = tracker.turns.find((t) => t.messageId === messageId);
   const touchedFiles = turn?.files ?? [];
 
-  for (const relPath of touchedFiles) {
-    const workspacePath = join(process.cwd(), relPath);
-    const snapPath = join(dir, relPath);
+  for (const absPath of touchedFiles) {
+    const snapPath = join(dir, snapshotKey(absPath));
 
     if (existsSync(snapPath)) {
       // File existed before this turn — restore from snapshot
-      await mkdir(dirname(workspacePath), { recursive: true });
-      await cp(snapPath, workspacePath);
-      restored.push(relPath);
+      await mkdir(dirname(absPath), { recursive: true });
+      await cp(snapPath, absPath);
+      restored.push(displayPath(absPath));
     } else {
       // No snapshot → file was created this turn → delete it
-      if (existsSync(workspacePath)) {
-        await rm(workspacePath);
-        deleted.push(relPath);
+      if (existsSync(absPath)) {
+        await rm(absPath);
+        deleted.push(displayPath(absPath));
       }
     }
   }
@@ -211,10 +227,10 @@ export async function preTurnSnapshot(
   if (!previousTurn || previousTurn.files.length === 0) return;
 
   // Snapshot files from the previous turn under the new turn's messageId
-  for (const relPath of previousTurn.files) {
-    if (!snapshottedThisTurn.has(relPath)) {
-      snapshottedThisTurn.add(relPath);
-      await snapshotFile(sessionId, messageId, relPath);
+  for (const absPath of previousTurn.files) {
+    if (!snapshottedThisTurn.has(absPath)) {
+      snapshottedThisTurn.add(absPath);
+      await snapshotFile(sessionId, messageId, absPath);
     }
   }
 }
@@ -251,10 +267,11 @@ export function setCurrentTurn(sessionId: string, messageId: string): void {
  */
 export async function trackFile(
   sessionId: string,
-  relPath: string,
+  inputPath: string,
 ): Promise<void> {
   if (!currentTurnMsgId) return;
 
+  const absPath = resolve(process.cwd(), inputPath);
   const tracker = loadTracker(sessionId);
   let turn = tracker.turns.find((t) => t.messageId === currentTurnMsgId);
 
@@ -263,8 +280,8 @@ export async function trackFile(
     tracker.turns.push(turn);
   }
 
-  if (!turn.files.includes(relPath)) {
-    turn.files.push(relPath);
+  if (!turn.files.includes(absPath)) {
+    turn.files.push(absPath);
     await saveTracker(sessionId, tracker);
   }
 }
@@ -274,25 +291,31 @@ export async function trackFile(
 // ---------------------------------------------------------------------------
 
 /**
- * File-extracting tool IDs. Both use `filePath` in their args.
+ * File-extracting tool IDs.
  */
 const FILE_TOOLS = new Set(["write", "edit"]);
 
 /**
  * Extract the file path from a tool call's arguments.
- * Returns an absolute path, or null if the tool doesn't modify files.
+ * Accepts both `args.path` (reference tools) and `args.filePath` (legacy convention).
+ * Returns a canonical absolute path, or null if the tool doesn't modify files.
  */
 export function extractFilePath(toolId: string, args: Record<string, unknown>): string | null {
   if (!FILE_TOOLS.has(toolId)) return null;
-  const fp = args.filePath;
-  if (typeof fp !== "string" || fp.length === 0) return null;
-  return fp;
+  const fp = (typeof args.path === "string" && args.path.length > 0)
+    ? args.path
+    : (typeof args.filePath === "string" && args.filePath.length > 0)
+      ? args.filePath
+      : null;
+  if (!fp) return null;
+  return resolve(process.cwd(), fp);
 }
 
 /**
  * Called in toAITool() before a write/edit tool executes.
  * Lazily snapshots the file if not already done this turn,
  * and registers it in the turn tracker.
+ * Now works for files anywhere on disk (not limited to cwd).
  */
 export async function toolPreExecute(
   sessionId: string,
@@ -300,16 +323,15 @@ export async function toolPreExecute(
 ): Promise<void> {
   if (!currentTurnMsgId) return;
 
-  const relPath = toRelPath(filePath);
-  if (!relPath) return; // outside workspace
+  const absPath = resolve(process.cwd(), filePath);
 
   // Track the file for this turn
-  await trackFile(sessionId, relPath);
+  await trackFile(sessionId, absPath);
 
   // Lazy snapshot — only if not already snapshotted this turn
-  if (!snapshottedThisTurn.has(relPath)) {
-    snapshottedThisTurn.add(relPath);
-    await snapshotFile(sessionId, currentTurnMsgId, relPath);
+  if (!snapshottedThisTurn.has(absPath)) {
+    snapshottedThisTurn.add(absPath);
+    await snapshotFile(sessionId, currentTurnMsgId, absPath);
   }
 }
 

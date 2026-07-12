@@ -4,8 +4,8 @@
 // in a real filesystem with temp directories.
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { setSessionStorageRoot, getSessionStorageRoot } from "../../src/storage/session-path";
 import {
@@ -61,24 +61,35 @@ function readFile(relPath: string): string {
 // ---------------------------------------------------------------------------
 
 describe("extractFilePath", () => {
-  test("extracts filePath from write tool args", () => {
+  test("extracts path from write tool args (reference convention)", () => {
+    const result = extractFilePath("write", { path: "/tmp/foo.ts" });
+    expect(result).toBe("/tmp/foo.ts");
+  });
+
+  test("extracts filePath from write tool args (legacy convention)", () => {
     const result = extractFilePath("write", { filePath: "/tmp/foo.ts" });
     expect(result).toBe("/tmp/foo.ts");
   });
 
-  test("extracts filePath from edit tool args", () => {
-    const result = extractFilePath("edit", { filePath: "/tmp/foo.ts" });
-    expect(result).toBe("/tmp/foo.ts");
+  test("prefers path over filePath when both present", () => {
+    const result = extractFilePath("write", { path: "/tmp/a.ts", filePath: "/tmp/b.ts" });
+    expect(result).toBe("/tmp/a.ts");
+  });
+
+  test("resolves relative paths against cwd", () => {
+    const result = extractFilePath("write", { path: "src/app.ts" });
+    expect(result).toBe(resolve(workspace, "src/app.ts"));
   });
 
   test("returns null for non-file tools", () => {
-    expect(extractFilePath("read", { filePath: "/tmp/foo.ts" })).toBeNull();
+    expect(extractFilePath("read", { path: "/tmp/foo.ts" })).toBeNull();
     expect(extractFilePath("bash", { command: "echo hi" })).toBeNull();
   });
 
-  test("returns null for missing filePath", () => {
+  test("returns null for missing path", () => {
     expect(extractFilePath("write", {})).toBeNull();
-    expect(extractFilePath("write", { filePath: "" })).toBeNull();
+    expect(extractFilePath("write", { path: "" })).toBeNull();
+    expect(extractFilePath("write", { path: "" })).toBeNull();
   });
 });
 
@@ -229,17 +240,66 @@ describe("toolPreExecute", () => {
     expect(readFile("lazy.ts")).toBe("lazy-original");
   });
 
-  test("skips files outside workspace", async () => {
-    setCurrentTurn(sessionId, turn1Id);
-    await toolPreExecute(sessionId, "/etc/passwd");
+  test("tracks and restores files outside workspace", async () => {
+    // Create a file outside the workspace (in OS tmpdir)
+    const externalPath = join(tmpdir(), "quark-undo-external-test.txt");
+    writeFileSync(externalPath, "external-original");
+    try {
+      setCurrentTurn(sessionId, turn1Id);
+      await toolPreExecute(sessionId, externalPath);
 
-    // Should not track or snapshot anything — but the turn still exists
-    // (zero files), so undo succeeds with no files to restore
+      // Modify the external file
+      writeFileSync(externalPath, "external-modified");
+
+      const result = await undoLatest(sessionId);
+      expect(result).not.toBeNull();
+      expect(result!.restored).toEqual([externalPath]);
+      expect(result!.deleted).toEqual([]);
+      expect(result!.messageId).toBe(turn1Id);
+
+      // External file should be restored to original content
+      expect(readFileSync(externalPath, "utf-8")).toBe("external-original");
+    } finally {
+      rmSync(externalPath, { force: true });
+    }
+  });
+
+  test("undo deletes external files created during the turn", async () => {
+    const externalPath = join(tmpdir(), "quark-undo-external-new.txt");
+    // File does NOT exist before the turn
+    setCurrentTurn(sessionId, turn1Id);
+    await toolPreExecute(sessionId, externalPath);
+    // No snapshot taken (file didn't exist) — simulate agent creating it
+    writeFileSync(externalPath, "external-new");
+
     const result = await undoLatest(sessionId);
     expect(result).not.toBeNull();
     expect(result!.restored).toEqual([]);
-    expect(result!.deleted).toEqual([]);
-    expect(result!.messageId).toBe(turn1Id);
+    expect(result!.deleted).toEqual([externalPath]);
+    expect(existsSync(externalPath)).toBe(false);
+  });
+
+  test("external files use hash-based snapshot keys", async () => {
+    const externalPathA = join(tmpdir(), "quark-undo-ext-a.txt");
+    const externalPathB = join(tmpdir(), "quark-undo-ext-b.txt");
+    writeFileSync(externalPathA, "content-a");
+    writeFileSync(externalPathB, "content-b");
+    try {
+      // Snapshot both without tracking
+      setCurrentTurn(sessionId, turn1Id);
+      await takeSnapshot(sessionId, turn1Id, [externalPathA, externalPathB]);
+
+      // Verify the snapshots exist with different keys
+      const dir = join(storageRoot, sessionId, "undo", turn1Id);
+      const entries = readdirSync(dir);
+      expect(entries.length).toBe(2);
+      entries.sort();
+      // Two distinct hash-based keys
+      expect(entries[0]).not.toBe(entries[1]);
+    } finally {
+      rmSync(externalPathA, { force: true });
+      rmSync(externalPathB, { force: true });
+    }
   });
 
   test("only snapshots a file once per turn", async () => {

@@ -2470,5 +2470,29 @@
     "profile": "coder",
     "timeCreated": 1783833991525,
     "timeUpdated": 1783833991525
+  },
+  {
+    "id": "task_tDFKZRrZ9F6ftaZr",
+    "title": "Casual User Greeting",
+    "description": "Casual User Greeting",
+    "profile": "coder",
+    "timeCreated": 1783839066091,
+    "timeUpdated": 1783839072464
+  },
+  {
+    "id": "task_FJpekdNfkCHda2R2",
+    "title": "hello",
+    "description": "hello",
+    "profile": "coder",
+    "timeCreated": 1783839460176,
+    "timeUpdated": 1783839460176
+  },
+  {
+    "id": "task_TI7LRCI2XjehQjHO",
+    "title": "read the file in ~/.config/quark/skills",
+    "description": "read the file in ~/.config/quark/skills",
+    "profile": "coder",
+    "timeCreated": 1783843989728,
+    "timeUpdated": 1783843989728
   }
 ]
