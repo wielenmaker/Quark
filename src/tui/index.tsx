@@ -28,7 +28,7 @@ import { clearCache as clearSkillCache } from "../skill/skill"
 import { register, clear as clearRegistry } from "../tool/registry"
 import { buildSkillTool } from "../tool/skill"
 import { resetBootstrap } from "../bootstrap"
-import { info as notifyInfo } from "../notification/notification"
+import { dismiss, getActive, info as notifyInfo } from "../notification/notification"
 import { undoLatest } from "../commands/undo"
 import { exportSessionToMarkdown } from "../commands/export"
 import { runGoal } from "../commands/goal/orchestrator"
@@ -404,6 +404,9 @@ async function handleCommand(command: string, args: string, sessionId: string | 
 
   // /reload-config — reload config without restarting (works without an active session)
   if (command === "reload-config") {
+    for (const n of getActive()) {
+      if (n.title === "Thinking configuration") dismiss(n.id)
+    }
     resetConfigCache()
     resetProfileCache()
     const reloadedProfile = resolveProfile(activeAgent.id)
