@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { toModelMessages } from "../../src/session/message";
+import { toModelMessages, formatConversation } from "../../src/session/message";
 import type { MessageRow, PartRow } from "../../src/session/message";
 
 describe("toModelMessages aborted message filtering", () => {
@@ -350,5 +350,189 @@ describe("toModelMessages reasoning replay", () => {
     expect(reasoningPart!.text).toBe("I need to read the file first.");
     expect(toolCallPart).toBeDefined();
     expect(toolCallPart!.toolName).toBe("read");
+  });
+});
+
+describe("formatConversation", () => {
+  test("renders user and assistant text messages", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "user",
+        providerId: null,
+        modelId: null,
+        finish: null,
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+      {
+        id: "m2",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "stop",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 2,
+        timeCompleted: 2,
+      },
+    ];
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Hello" }) },
+      { id: "p2", messageId: "m2", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Hi there" }) },
+    ];
+
+    expect(formatConversation(messages, parts)).toBe("User: Hello\n\nAssistant: Hi there");
+  });
+
+  test("includes tool-call names when includeToolCalls is true", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "tool-calls",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+    ];
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "I will read the file." }) },
+      {
+        id: "p2",
+        messageId: "m1",
+        sessionId: "s1",
+        type: "tool",
+        data: JSON.stringify({
+          tool: "read",
+          callId: "call-1",
+          status: "completed",
+          input: { path: "src/app.ts" },
+          output: "secret output",
+        }),
+      },
+    ];
+
+    const result = formatConversation(messages, parts, { includeToolCalls: true });
+    expect(result).toContain("Assistant: I will read the file.");
+    expect(result).toContain("→ read");
+    expect(result).not.toContain("secret output");
+  });
+
+  test("excludes reasoning and step markers by default", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "stop",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+    ];
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "reasoning", data: JSON.stringify({ text: "thinking" }) },
+      { id: "p2", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Done" }) },
+      { id: "p3", messageId: "m1", sessionId: "s1", type: "step-finish", data: JSON.stringify({ reason: "stop" }) },
+    ];
+
+    const result = formatConversation(messages, parts);
+    expect(result).toBe("Assistant: Done");
+  });
+
+  test("skips aborted messages", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "aborted",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+      {
+        id: "m2",
+        sessionId: "s1",
+        role: "user",
+        providerId: null,
+        modelId: null,
+        finish: null,
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 2,
+        timeCompleted: 2,
+      },
+    ];
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "aborted text" }) },
+      { id: "p2", messageId: "m2", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Retry" }) },
+    ];
+
+    expect(formatConversation(messages, parts)).toBe("User: Retry");
+  });
+
+  test("uses custom prefixes and separator for markdown export", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "user",
+        providerId: null,
+        modelId: null,
+        finish: null,
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+      {
+        id: "m2",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "stop",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 2,
+        timeCompleted: 2,
+      },
+    ];
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Hello" }) },
+      { id: "p2", messageId: "m2", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Hi" }) },
+    ];
+
+    const result = formatConversation(messages, parts, {
+      userPrefix: "## User",
+      assistantPrefix: "## Assistant",
+      separator: "\n\n",
+      prefixSeparator: "\n\n",
+    });
+    expect(result).toBe("## User\n\nHello\n\n## Assistant\n\nHi");
   });
 });

@@ -1,12 +1,10 @@
 // Session branching — task-first replacement for automatic compaction
 
-import { generateId, generateText, type LanguageModel, type ModelMessage } from "ai"
+import { generateText, type LanguageModel, type ModelMessage } from "ai"
 import { getTask } from "../task/task"
 import { getContextWindow, getLastInputTokens, estimateTokens, isOverContextThreshold } from "./context"
 import { createSession, getSession, listAllSessions, updateSession, type Session } from "./session"
-import { saveUserMessage, type MessageRow, type PartRow } from "./message"
-import { appendEvents } from "../storage/session-jsonl"
-import type { MessageEvent, PartEvent, MessageEndEvent } from "../storage/session-format"
+import { saveUserMessage, formatConversation, type MessageRow, type PartRow } from "./message"
 import { warn } from "../notification/notification"
 
 const SUMMARY_PROMPT = `Analyze this conversation and produce a continuation context for a child branch session.
@@ -40,11 +38,8 @@ export interface AutoBranchInput extends SummarizeForBranchInput {
 export interface CreateBranchInput {
   sessionId: string
   summary: string
-  prompt?: string
   profile: string
   filesModified?: string[] | null
-  recentMessages?: MessageRow[]
-  recentParts?: PartRow[]
 }
 
 export type SplitResult = {
@@ -55,31 +50,30 @@ export type SplitResult = {
 }
 
 /**
- * Strip tool/runtime parts, then split into old history and recent context.
- * Old history is summarized. Recent messages are replayed into the child
- * session as text conversation context.
+ * Split conversation into old history and recent context.
+ * Old history is summarized. Recent messages are passed to buildBranchMessage
+ * for the steer/auto-branch prompt.
  */
 export function splitMessages(
   messages: MessageRow[],
   parts: PartRow[],
   keepMessages = 3,
 ): SplitResult {
-  const stripped = stripForBranch(messages, parts)
-  const cutoff = Math.max(0, stripped.messages.length - keepMessages)
+  const cutoff = Math.max(0, messages.length - keepMessages)
 
   const oldIds = new Set<string>()
   const recentIds = new Set<string>()
-  for (let i = 0; i < stripped.messages.length; i++) {
-    const id = stripped.messages[i]!.id
+  for (let i = 0; i < messages.length; i++) {
+    const id = messages[i]!.id
     if (i < cutoff) oldIds.add(id)
     else recentIds.add(id)
   }
 
   return {
-    oldMessages: stripped.messages.slice(0, cutoff),
-    oldParts: stripped.parts.filter((p) => oldIds.has(p.messageId)),
-    recentMessages: stripped.messages.slice(cutoff),
-    recentParts: stripped.parts.filter((p) => recentIds.has(p.messageId)),
+    oldMessages: messages.slice(0, cutoff),
+    oldParts: parts.filter((p) => oldIds.has(p.messageId)),
+    recentMessages: messages.slice(cutoff),
+    recentParts: parts.filter((p) => recentIds.has(p.messageId)),
   }
 }
 
@@ -202,11 +196,12 @@ export function buildTextTranscript(
  */
 export async function summarizeForBranch(input: SummarizeForBranchInput): Promise<string> {
   const { oldMessages, oldParts } = splitMessages(input.messages, input.parts)
+  const stripped = stripForBranch(oldMessages, oldParts)
 
-  if (oldMessages.length === 0) return ""
+  if (stripped.messages.length === 0) return ""
 
-  const transcript = buildTextTranscript(oldMessages, oldParts)
-  if (!transcript) return fallbackSummary(oldMessages, oldParts)
+  const transcript = buildTextTranscript(stripped.messages, stripped.parts)
+  if (!transcript) return fallbackSummary(stripped.messages, stripped.parts)
 
   try {
     const result = await generateText({
@@ -218,12 +213,12 @@ export async function summarizeForBranch(input: SummarizeForBranchInput): Promis
     const text = result.text.trim()
     if (!text) {
       warn("Branch Summary", "LLM returned empty summary — using fallback")
-      return fallbackSummary(oldMessages, oldParts)
+      return fallbackSummary(stripped.messages, stripped.parts)
     }
     return text
   } catch (err) {
     warn("Branch Summary", `LLM summarization failed: ${err instanceof Error ? err.message : String(err)} — using fallback`)
-    return fallbackSummary(oldMessages, oldParts)
+    return fallbackSummary(stripped.messages, stripped.parts)
   }
 }
 
@@ -240,13 +235,48 @@ export async function autoBranch(input: AutoBranchInput): Promise<BranchResult> 
   const existing = parent.summary?.trim()
   const summary = existing && existing.length > 0 ? existing : await summarizeForBranch(input)
   const { recentMessages, recentParts } = splitMessages(input.messages, input.parts)
-  return createBranch({
+  const result = createBranch({
     sessionId: input.sessionId,
     summary,
     profile: input.profile,
-    recentMessages,
-    recentParts,
   })
+  const text = buildBranchMessage(summary, recentMessages, recentParts, "")
+  if (text.trim()) {
+    saveUserMessage({ sessionId: result.sessionId, text })
+  }
+  return result
+}
+
+/**
+ * Compose summary, recent context, and goal into a single user message string.
+ * This is the prompt sent to the model after branching.
+ */
+export function buildBranchMessage(
+  summary: string,
+  recentMessages: MessageRow[],
+  recentParts: PartRow[],
+  prompt: string,
+): string {
+  const parts: string[] = []
+
+  const trimmedSummary = summary.trim()
+  if (trimmedSummary) {
+    parts.push(`Conversation summary:\n${trimmedSummary}`)
+  }
+
+  const recent = formatConversation(recentMessages, recentParts, {
+    includeToolCalls: true,
+  })
+  if (recent) {
+    parts.push(`Recent context:\n\n${recent}`)
+  }
+
+  const trimmedPrompt = prompt.trim()
+  if (trimmedPrompt) {
+    parts.push(`Goal:\n${trimmedPrompt}`)
+  }
+
+  return parts.join("\n\n")
 }
 
 /**
@@ -257,7 +287,6 @@ export async function autoBranch(input: AutoBranchInput): Promise<BranchResult> 
  * const branch = createBranch({
  *   sessionId,
  *   summary: "Implemented task metadata",
- *   prompt: "Continue with branch routing",
  *   profile: "coder",
  * })
  * ```
@@ -295,87 +324,6 @@ export function createBranch(input: CreateBranchInput): BranchResult {
     parentSummary: summary || null,
     filesModified,
   })
-
-  const lineageContext = buildLineageContext(child.id)
-  const now = Date.now()
-
-  // 1. Save summary/lineage as the first user message.
-  const seedText = lineageContext || summary
-  if (seedText) {
-    saveUserMessage({ sessionId: child.id, text: seedText })
-  }
-
-  // 2. Replay stripped recent messages into the child session.
-  if (input.recentMessages && input.recentMessages.length > 0) {
-    const strippedRecent = stripForBranch(input.recentMessages, input.recentParts ?? [])
-    const recentParts = strippedRecent.parts
-    const partsByMsg = new Map<string, PartRow[]>()
-    for (const p of recentParts) {
-      const list = partsByMsg.get(p.messageId) ?? []
-      list.push(p)
-      partsByMsg.set(p.messageId, list)
-    }
-
-    for (const msg of strippedRecent.messages) {
-      const messageId = generateId()
-      const events: (MessageEvent | PartEvent | MessageEndEvent)[] = []
-
-      events.push({
-        v: 1,
-        ts: now,
-        sessionId: child.id,
-        type: "message",
-        messageId,
-        role: msg.role,
-        modelId: msg.modelId,
-        providerId: msg.providerId,
-        timeCreated: msg.timeCreated,
-      })
-
-      for (const part of partsByMsg.get(msg.id) ?? []) {
-        let data: unknown
-        try {
-          data = JSON.parse(part.data)
-        } catch {
-          continue
-        }
-
-        events.push({
-          v: 1,
-          ts: now,
-          sessionId: child.id,
-          type: "part",
-          messageId,
-          partId: generateId(),
-          partType: part.type,
-          data,
-        })
-      }
-
-      if (msg.finish) {
-        events.push({
-          v: 1,
-          ts: now,
-          sessionId: child.id,
-          type: "message-end",
-          messageId,
-          finish: msg.finish,
-          cost: msg.cost,
-          tokensIn: msg.tokensIn,
-          tokensOut: msg.tokensOut,
-          timeCompleted: msg.timeCompleted ?? now,
-        })
-      }
-
-      appendEvents(child.id, events)
-    }
-  }
-
-  // 3. Append the steer goal as the final user message
-  const prompt = input.prompt?.trim()
-  if (prompt) {
-    saveUserMessage({ sessionId: child.id, text: prompt, variant: "steer" })
-  }
 
   return { sessionId: child.id, created: true, summary }
 }

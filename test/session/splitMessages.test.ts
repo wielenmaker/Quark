@@ -86,7 +86,7 @@ function makeMessages(pairs: number): { messages: MessageRow[]; parts: PartRow[]
 // ---------------------------------------------------------------------------
 
 describe("splitMessages", () => {
-  it("splits at the last 3 stripped messages", () => {
+  it("splits at the last 3 messages", () => {
     const { messages, parts } = makeMessages(5)
 
     const result = splitMessages(messages, parts, 3)
@@ -170,7 +170,7 @@ describe("splitMessages", () => {
     )
   })
 
-  it("strips aborted assistant messages from both old and recent", () => {
+  it("keeps aborted assistant messages; downstream formatters skip them", () => {
     const messages: MessageRow[] = [
       msg("u0", "user"),
       { ...msg("a0", "assistant"), finish: "aborted" as const },
@@ -186,23 +186,12 @@ describe("splitMessages", () => {
 
     const result = splitMessages(messages, parts, 4)
 
-    // a0 (aborted) is stripped entirely; remaining are u0, u1, a1
-    expect(result.recentMessages.map((m) => m.id)).toEqual(["u0", "u1", "a1"])
-    expect(result.recentParts.map((p) => p.messageId)).toEqual(["u0", "u1", "a1"])
-    // Aborted text should not appear anywhere
-    const abortedText = result.recentParts.find(
-      (p) => {
-        const d = JSON.parse(p.data) as { text?: string }
-        return d.text === "aborted response"
-      },
-    )
-    expect(abortedText).toBeUndefined()
-    // Old bucket is empty since all fit within keepMessages
+    expect(result.recentMessages.map((m) => m.id)).toEqual(["u0", "a0", "u1", "a1"])
+    expect(result.recentParts.map((p) => p.messageId)).toEqual(["u0", "a0", "u1", "a1"])
     expect(result.oldMessages.length).toBe(0)
   })
 
-  it("aborted messages are stripped before the split count", () => {
-    // 5 non-aborted messages + 1 aborted; keep 3 should count only non-aborted
+  it("counts aborted messages in the split", () => {
     const messages: MessageRow[] = [
       msg("u0", "user"),
       { ...msg("a0", "assistant"), finish: "aborted" as const },
@@ -222,13 +211,11 @@ describe("splitMessages", () => {
 
     const result = splitMessages(messages, parts, 3)
 
-    // After stripping a0: remaining = [u0, u1, a1, u2, a2] (5 messages)
-    // keep 3 → old = first 2, recent = last 3
-    expect(result.oldMessages.map((m) => m.id)).toEqual(["u0", "u1"])
+    expect(result.oldMessages.map((m) => m.id)).toEqual(["u0", "a0", "u1"])
     expect(result.recentMessages.map((m) => m.id)).toEqual(["a1", "u2", "a2"])
   })
 
-  it("strips tool and runtime parts before splitting", () => {
+  it("keeps tool and runtime parts for recent context", () => {
     const messages = [
       msg("u0", "user"),
       msg("a0", "assistant"),
@@ -247,7 +234,14 @@ describe("splitMessages", () => {
 
     const result = splitMessages(messages, parts, 3)
 
-    expect(result.recentMessages.map((m) => m.id)).toEqual(["u0", "a0", "u1"])
-    expect(result.recentParts.map((p) => p.type)).toEqual(["text", "text", "text"])
+    expect(result.recentMessages.map((m) => m.id)).toEqual(["a0", "a-tool-only", "u1"])
+    expect(result.recentParts.map((p) => p.type)).toEqual([
+      "text",
+      "tool",
+      "image",
+      "step-finish",
+      "tool",
+      "text",
+    ])
   })
 })

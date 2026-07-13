@@ -291,6 +291,81 @@ export function isAbortedMessage(msg: MessageRow): boolean {
   return msg.finish === "aborted"
 }
 
+// ---- Format conversation as text ----
+
+export interface FormatConversationOptions {
+  includeToolCalls?: boolean
+  includeReasoning?: boolean
+  userPrefix?: string
+  assistantPrefix?: string
+  separator?: string
+  prefixSeparator?: string
+}
+
+export function formatConversation(
+  messages: MessageRow[],
+  parts: PartRow[],
+  opts: FormatConversationOptions = {},
+): string {
+  const {
+    includeToolCalls = false,
+    includeReasoning = false,
+    userPrefix = "User",
+    assistantPrefix = "Assistant",
+    separator = "\n\n",
+    prefixSeparator = ": ",
+  } = opts
+
+  const abortedIds = new Set<string>()
+  for (const msg of messages) {
+    if (msg.finish === "aborted") abortedIds.add(msg.id)
+  }
+
+  const partsByMsg = new Map<string, PartRow[]>()
+  for (const part of parts) {
+    const list = partsByMsg.get(part.messageId) ?? []
+    list.push(part)
+    partsByMsg.set(part.messageId, list)
+  }
+
+  const chunks: string[] = []
+  for (const msg of messages) {
+    if (abortedIds.has(msg.id)) continue
+
+    const msgParts = partsByMsg.get(msg.id) ?? []
+    const lines: string[] = []
+
+    for (const part of msgParts) {
+      if (part.type === "text") {
+        const d = JSON.parse(part.data) as TextPartData
+        if (d.text) lines.push(d.text)
+      } else if (part.type === "summary") {
+        const d = JSON.parse(part.data) as SummaryData
+        if (d.text) lines.push(d.text)
+      } else if (part.type === "reasoning" && includeReasoning) {
+        const d = JSON.parse(part.data) as ReasoningPartData
+        if (d.text) lines.push(d.text)
+      } else if (part.type === "tool" && includeToolCalls) {
+        const d = JSON.parse(part.data) as ToolPartData
+        lines.push(`→ ${d.tool}${formatToolInput(d.input)}`)
+      }
+    }
+
+    if (lines.length === 0) continue
+    const prefix = msg.role === "user" ? userPrefix : assistantPrefix
+    chunks.push(`${prefix}${prefixSeparator}${lines.join("\n")}`)
+  }
+
+  return chunks.join(separator)
+}
+
+function formatToolInput(input: Record<string, unknown>): string {
+  const keys = Object.keys(input)
+  if (keys.length === 0) return ""
+  const parts = keys.map((k) => `${k}=${JSON.stringify(input[k])}`)
+  return `(${parts.join(", ")})`
+}
+
 // ---- Load operations ----
 
 export function loadMessages(sessionId: string): {

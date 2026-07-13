@@ -14,7 +14,7 @@ import { loadMessages, toModelMessages } from "../session/message"
 import { buildSystem } from "../session/system"
 import { getModelLimit, refreshLMStudio } from "../provider/models"
 import { estimateTokens, getLastInputTokens } from "../session/context"
-import { summarizeForBranch, createBranch, splitMessages } from "../session/branch"
+import { summarizeForBranch, createBranch, buildBranchMessage, splitMessages } from "../session/branch"
 import { bus } from "../session/events"
 import { agentFromProfile, type AgentConfig } from "../agent"
 import { discoverSkills, loadSkill } from "../skill/skill"
@@ -500,24 +500,31 @@ async function handleCommand(command: string, args: string, sessionId: string | 
         const branch = createBranch({
           sessionId: sid,
           summary,
-          prompt: args.trim(),
           profile: activeAgent.id,
-          recentMessages,
-          recentParts,
         })
+
+        const promptText = buildBranchMessage(summary, recentMessages, recentParts, args.trim())
 
         currentSession = { id: branch.sessionId }
         process.env.QUARK_SESSION_ID = branch.sessionId
         const child = loadMessages(branch.sessionId)
         const tuiMessages = dbToTuiMessages(child.messages, child.parts)
-        const modelMessages = toModelMessages(child.messages, child.parts)
         const system = buildSystem(activeAgent)
         const systemStr = Array.isArray(system) ? system.join("\n") : system
-        const estimatedTokens = estimateTokens(systemStr, modelMessages)
+        const estimatedTokens = estimateTokens(systemStr, [{ role: "user", content: promptText }])
         bus.emit("steer-end", { sessionId: sid })
         steeringEnded = true
         bus.emit("session-switch", { sessionId: branch.sessionId, messages: tuiMessages, estimatedTokens })
         notifyInfo("Steer", `Branched to new session`, 3000)
+
+        prompt({
+          sessionId: branch.sessionId,
+          parts: [{ type: "text", text: promptText }],
+          model: modelOverride ?? undefined,
+          agent: activeAgent,
+        }).catch((err) => {
+          bus.emit("error", { sessionId: branch.sessionId, error: err })
+        })
       } catch (err) {
         bus.emit("error", {
           sessionId: sid,

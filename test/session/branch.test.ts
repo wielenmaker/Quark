@@ -11,13 +11,17 @@ import {
   finishMessage,
   loadMessages,
   saveUserMessage,
+  type MessageRow,
+  type PartRow,
 } from "../../src/session/message"
 import {
+  buildBranchMessage,
   buildLineageContext,
   createBranch,
   extractLastUserText,
   getSessionLineage,
   shouldBranchWithRealTokens,
+  autoBranch,
 } from "../../src/session/branch"
 import { createTask, setTaskStorageRoot } from "../../src/task/task"
 
@@ -60,7 +64,6 @@ describe("session branching", () => {
     const result = createBranch({
       sessionId: parent.id,
       summary: "Added task metadata",
-      prompt: "Continue with branching",
       profile: "coder",
     })
 
@@ -76,7 +79,7 @@ describe("session branching", () => {
     expect(listSessions().map((s) => s.id)).toContain(child.id)
   })
 
-  test("seeds child session with lineage context and prompt", () => {
+  test("does not seed child session with messages", () => {
     const task = createTask({
       title: "Branch context",
       description: "Keep context across branches",
@@ -87,37 +90,81 @@ describe("session branching", () => {
     const result = createBranch({
       sessionId: parent.id,
       summary: "Parent did the first half",
-      prompt: "Finish the second half",
       profile: "coder",
     })
 
-    const { messages, parts } = loadMessages(result.sessionId)
-    const text = parts
-      .filter((p) => p.type === "text")
-      .map((p) => (JSON.parse(p.data) as { text: string }).text)
-      .join("\n")
-    const lastUser = extractLastUserText(messages, parts)
-    const lastText = parts
-      .filter((part) => part.type === "text")
-      .at(-1)
-
-    expect(text).toContain("Task: Keep context across branches")
-    expect(text).toContain("Session")
-    expect(text).toContain("Parent did the first half")
-    expect(lastUser).toBe("Finish the second half")
-    expect(JSON.parse(lastText!.data)).toEqual({
-      text: "Finish the second half",
-      variant: "steer",
-    })
+    const { messages } = loadMessages(result.sessionId)
+    expect(messages.length).toBe(0)
   })
 
-  test("replays recent context without tool/runtime parts", () => {
+  test("buildBranchMessage composes summary, recent context, and goal", () => {
+    const messages: MessageRow[] = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        role: "user",
+        providerId: null,
+        modelId: null,
+        finish: null,
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 1,
+        timeCompleted: 1,
+      },
+      {
+        id: "m2",
+        sessionId: "s1",
+        role: "assistant",
+        providerId: "copilot",
+        modelId: "gpt-5",
+        finish: "tool-calls",
+        cost: null,
+        tokensIn: null,
+        tokensOut: null,
+        timeCreated: 2,
+        timeCompleted: 2,
+      },
+    ]
+    const parts: PartRow[] = [
+      { id: "p1", messageId: "m1", sessionId: "s1", type: "text", data: JSON.stringify({ text: "Inspect src/session/branch.ts" }) },
+      { id: "p2", messageId: "m2", sessionId: "s1", type: "text", data: JSON.stringify({ text: "I inspected the file." }) },
+      {
+        id: "p3",
+        messageId: "m2",
+        sessionId: "s1",
+        type: "tool",
+        data: JSON.stringify({
+          tool: "read",
+          callId: "call_1",
+          status: "completed",
+          input: { path: "src/session/branch.ts" },
+          output: "large tool output",
+        }),
+      },
+    ]
+
+    const text = buildBranchMessage("Older work summary", messages, parts, "Refactor auth")
+
+    expect(text).toContain("Conversation summary:")
+    expect(text).toContain("Older work summary")
+    expect(text).toContain("Recent context:")
+    expect(text).toContain("User: Inspect src/session/branch.ts")
+    expect(text).toContain("Assistant: I inspected the file.")
+    expect(text).toContain("→ read")
+    expect(text).not.toContain("large tool output")
+    expect(text).toContain("Goal:")
+    expect(text).toContain("Refactor auth")
+  })
+
+  test("autoBranch saves composed message when parent summary is frozen", async () => {
     const task = createTask({
-      title: "Strip tools",
-      description: "Strip tools from replayed branch context",
+      title: "Auto branch",
+      description: "Auto branch saves composed message",
       profile: "coder",
     })
     const parent = createSession({ taskId: task.id })
+    updateSession(parent.id, { summary: "Frozen summary" })
 
     saveUserMessage({ sessionId: parent.id, text: "Inspect src/session/branch.ts" })
     const assistant = createAssistantMessage({ sessionId: parent.id })
@@ -139,27 +186,28 @@ describe("session branching", () => {
         output: "large tool output",
       },
     })
-    addPart({
-      sessionId: parent.id,
-      messageId: assistant.id,
-      type: "step-finish",
-      data: { reason: "stop", tokens: { input: 100, output: 10 } },
-    })
     finishMessage(assistant.id, "stop", undefined, parent.id)
 
-    const recent = loadMessages(parent.id)
-    const result = createBranch({
+    const { messages, parts } = loadMessages(parent.id)
+    const fakeModel = {} as any
+    const result = await autoBranch({
       sessionId: parent.id,
-      summary: "Older work summary",
+      messages,
+      parts,
+      model: fakeModel,
       profile: "coder",
-      recentMessages: recent.messages,
-      recentParts: recent.parts,
     })
 
     const child = loadMessages(result.sessionId)
-    expect(child.parts.some((p) => p.type === "tool")).toBe(false)
-    expect(child.parts.some((p) => p.type === "step-finish")).toBe(false)
-    expect(extractLastUserText(child.messages, child.parts)).toBe("Inspect src/session/branch.ts")
+    expect(child.messages.length).toBe(1)
+    const text = child.parts
+      .filter((p) => p.type === "text")
+      .map((p) => (JSON.parse(p.data) as { text: string }).text)
+      .join("")
+    expect(text).toContain("Frozen summary")
+    expect(text).toContain("User: Inspect src/session/branch.ts")
+    expect(text).toContain("→ read")
+    expect(text).not.toContain("large tool output")
   })
 
   test("walks lineage from root to child", () => {
@@ -172,13 +220,11 @@ describe("session branching", () => {
     const child = createBranch({
       sessionId: root.id,
       summary: "Root summary",
-      prompt: "Next",
       profile: "coder",
     })
     const grandchild = createBranch({
       sessionId: child.sessionId,
       summary: "Child summary",
-      prompt: "Next again",
       profile: "coder",
     })
 
@@ -201,7 +247,6 @@ describe("session branching", () => {
     const first = createBranch({
       sessionId: parent.id,
       summary: "First snapshot — written by initial steer",
-      prompt: "Path A",
       profile: "coder",
     })
     const parentAfterFirst = getSession(parent.id)
@@ -211,7 +256,6 @@ describe("session branching", () => {
     const second = createBranch({
       sessionId: parent.id,
       summary: "Second LLM call — should be ignored",
-      prompt: "Path B",
       profile: "coder",
     })
 
@@ -235,7 +279,6 @@ describe("session branching", () => {
       createBranch({
         sessionId: parent.id,
         summary: "Should fail",
-        prompt: "Anything",
         profile: "coder",
       }),
     ).toThrow(/parent has no taskId/)
@@ -252,7 +295,6 @@ describe("session branching", () => {
     const result = createBranch({
       sessionId: parent.id,
       summary: "Snapshot",
-      prompt: "Continue",
       profile: "coder",
     })
 
