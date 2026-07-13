@@ -18,6 +18,7 @@ import {
   extractLastUserText,
   getSessionLineage,
   shouldBranchWithRealTokens,
+  BRANCH_FALLBACK_SUMMARY,
 } from "../../src/session/branch"
 import { createTask, setTaskStorageRoot } from "../../src/task/task"
 
@@ -280,5 +281,86 @@ describe("session branching", () => {
     )
 
     expect(result).toBe(true)
+  })
+
+  test("BRANCH_FALLBACK_SUMMARY contains an explicit fallback marker, not user text", () => {
+    expect(BRANCH_FALLBACK_SUMMARY).toContain("Fallback context")
+    expect(BRANCH_FALLBACK_SUMMARY).not.toContain("Latest user request")
+  })
+
+  test("child created with BRANCH_FALLBACK_SUMMARY gets correct context", () => {
+    const task = createTask({
+      title: "Fallback branch",
+      description: "Branch with fallback summary",
+      profile: "coder",
+    })
+    const parent = createSession({ taskId: task.id })
+
+    saveUserMessage({ sessionId: parent.id, text: "Inspect src/session/branch.ts" })
+    const assistant = createAssistantMessage({ sessionId: parent.id })
+    addPart({
+      sessionId: parent.id,
+      messageId: assistant.id,
+      type: "text",
+      data: { text: "Here is the file content." },
+    })
+    finishMessage(assistant.id, "stop", undefined, parent.id)
+
+    const recent = loadMessages(parent.id)
+    const result = createBranch({
+      sessionId: parent.id,
+      summary: BRANCH_FALLBACK_SUMMARY,
+      prompt: "Continue the work",
+      profile: "coder",
+      recentMessages: recent.messages,
+      recentParts: recent.parts,
+    })
+
+    const child = getSession(result.sessionId)
+    expect(child.parentSessionId).toBe(parent.id)
+    expect(child.taskId).toBe(task.id)
+    expect(child.parentSummary).toBe(BRANCH_FALLBACK_SUMMARY)
+
+    const { messages, parts } = loadMessages(result.sessionId)
+    const allText = parts
+      .filter((p) => p.type === "text")
+      .map((p) => (JSON.parse(p.data) as { text: string }).text)
+      .join("\n")
+    expect(allText).toContain("Fallback context")
+
+    const lastUser = extractLastUserText(messages, parts)
+    expect(lastUser).toBe("Continue the work")
+
+    // Recent messages are replayed
+    expect(allText).toContain("Inspect src/session/branch.ts")
+    expect(allText).toContain("Here is the file content.")
+  })
+
+  test("/steer command text is not used as fallback summary", () => {
+    const task = createTask({
+      title: "Steer command",
+      description: "Ensure /steer command is not leaked into summary",
+      profile: "coder",
+    })
+    const parent = createSession({ taskId: task.id })
+
+    // Simulate the last user text being a /steer command
+    saveUserMessage({ sessionId: parent.id, text: "/steer fix the auth bug" })
+
+    const recent = loadMessages(parent.id)
+    const result = createBranch({
+      sessionId: parent.id,
+      summary: BRANCH_FALLBACK_SUMMARY,
+      prompt: "fix the auth bug",
+      profile: "coder",
+      recentMessages: recent.messages,
+      recentParts: recent.parts,
+    })
+
+    const child = getSession(result.sessionId)
+    // The parentSummary stored on the child is the fallback marker, not the command
+    expect(child.parentSummary).toBe(BRANCH_FALLBACK_SUMMARY)
+    expect(child.parentSummary).not.toContain("/steer")
+    expect(child.parentSummary).not.toContain("Latest user request")
   })
 })

@@ -206,7 +206,7 @@ export async function summarizeForBranch(input: SummarizeForBranchInput): Promis
   if (oldMessages.length === 0) return ""
 
   const transcript = buildTextTranscript(oldMessages, oldParts)
-  if (!transcript) return fallbackSummary(oldMessages, oldParts)
+  if (!transcript) return fallbackSummary()
 
   try {
     const result = await generateText({
@@ -217,13 +217,14 @@ export async function summarizeForBranch(input: SummarizeForBranchInput): Promis
     })
     const text = result.text.trim()
     if (!text) {
-      warn("Branch Summary", "LLM returned empty summary — using fallback")
-      return fallbackSummary(oldMessages, oldParts)
+      warn("Branch Summary", "Could not summarize older session history. The branch will use recent conversation context instead.")
+      return fallbackSummary()
     }
     return text
   } catch (err) {
-    warn("Branch Summary", `LLM summarization failed: ${err instanceof Error ? err.message : String(err)} — using fallback`)
-    return fallbackSummary(oldMessages, oldParts)
+    const cause = err instanceof Error ? err.message : String(err)
+    warn("Branch Summary", `Could not summarize older session history. The branch will use recent conversation context instead. (${cause.slice(0, 80)})`)
+    return fallbackSummary()
   }
 }
 
@@ -380,10 +381,12 @@ export function createBranch(input: CreateBranchInput): BranchResult {
   return { sessionId: child.id, created: true, summary }
 }
 
-function fallbackSummary(messages: MessageRow[], parts: PartRow[]): string {
-  const lastUser = extractLastUserText(messages, parts)
-  if (lastUser) return `Latest user request: ${lastUser.slice(0, 500)}`
-  return "No text transcript was available for this session."
+/** Sentinel used when the summary API is unavailable or returns empty. */
+export const BRANCH_FALLBACK_SUMMARY =
+  "Fallback context: Unable to summarize older session history. Continue from the recent conversation context preserved in this branch."
+
+function fallbackSummary(): string {
+  return BRANCH_FALLBACK_SUMMARY
 }
 
 function stripForBranch(

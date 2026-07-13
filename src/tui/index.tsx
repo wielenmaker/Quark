@@ -14,7 +14,7 @@ import { loadMessages, toModelMessages } from "../session/message"
 import { buildSystem } from "../session/system"
 import { getModelLimit, refreshLMStudio } from "../provider/models"
 import { estimateTokens, getLastInputTokens } from "../session/context"
-import { summarizeForBranch, createBranch, splitMessages } from "../session/branch"
+import { summarizeForBranch, createBranch, splitMessages, BRANCH_FALLBACK_SUMMARY } from "../session/branch"
 import { bus } from "../session/events"
 import { agentFromProfile, type AgentConfig } from "../agent"
 import { discoverSkills, loadSkill } from "../skill/skill"
@@ -28,7 +28,7 @@ import { clearCache as clearSkillCache } from "../skill/skill"
 import { register, clear as clearRegistry } from "../tool/registry"
 import { buildSkillTool } from "../tool/skill"
 import { resetBootstrap } from "../bootstrap"
-import { dismiss, getActive, info as notifyInfo } from "../notification/notification"
+import { dismiss, getActive, info as notifyInfo, warn as notifyWarn } from "../notification/notification"
 import { undoLatest } from "../commands/undo"
 import { exportSessionToMarkdown } from "../commands/export"
 import { runGoal } from "../commands/goal/orchestrator"
@@ -481,22 +481,38 @@ async function handleCommand(command: string, args: string, sessionId: string | 
 
       bus.emit("steer-start", { sessionId: sid })
       let steeringEnded = false
+      let childSessionId: string | null = null
       try {
-        // Frozen-snapshot semantics: only summarize the parent the first time
-        // it is branched. Subsequent steers reuse the already-frozen summary
-        // so siblings share the same parentSummary and we skip a redundant
-        // LLM call.
         const parent = getSession(sid)
         const existing = parent.summary?.trim()
         const { messages, parts } = loadMessages(sid)
-        const { recentMessages, recentParts } = splitMessages(messages, parts)
+        const { recentMessages, recentParts, oldMessages } = splitMessages(messages, parts)
+
         let summary: string
+        let usedFallback = false
+
         if (existing && existing.length > 0) {
           summary = existing
+          usedFallback = summary === BRANCH_FALLBACK_SUMMARY
+        } else if (oldMessages.length === 0) {
+          summary = BRANCH_FALLBACK_SUMMARY
+          usedFallback = true
         } else {
-          const model = await resolveModel(loadConfig().small_model)
-          summary = await summarizeForBranch({ messages, parts, model })
+          try {
+            const model = await resolveModel(loadConfig().small_model)
+            summary = await summarizeForBranch({ messages, parts, model })
+            usedFallback = summary === BRANCH_FALLBACK_SUMMARY
+          } catch {
+            summary = BRANCH_FALLBACK_SUMMARY
+            usedFallback = true
+            notifyWarn(
+              "Steer",
+              "Could not load the summary model. Branching with recent context instead.",
+              8000,
+            )
+          }
         }
+
         const branch = createBranch({
           sessionId: sid,
           summary,
@@ -505,24 +521,50 @@ async function handleCommand(command: string, args: string, sessionId: string | 
           recentMessages,
           recentParts,
         })
+        childSessionId = branch.sessionId
 
-        currentSession = { id: branch.sessionId }
-        process.env.QUARK_SESSION_ID = branch.sessionId
+        // Prepare child data before switching session
         const child = loadMessages(branch.sessionId)
         const tuiMessages = dbToTuiMessages(child.messages, child.parts)
         const modelMessages = toModelMessages(child.messages, child.parts)
         const system = buildSystem(activeAgent)
         const systemStr = Array.isArray(system) ? system.join("\n") : system
         const estimatedTokens = estimateTokens(systemStr, modelMessages)
+
+        // Atomically switch to child
+        currentSession = { id: branch.sessionId }
+        process.env.QUARK_SESSION_ID = branch.sessionId
+
         bus.emit("steer-end", { sessionId: sid })
         steeringEnded = true
         bus.emit("session-switch", { sessionId: branch.sessionId, messages: tuiMessages, estimatedTokens })
-        notifyInfo("Steer", `Branched to new session`, 3000)
+        notifyInfo(
+          "Steer",
+          usedFallback
+            ? "Branched with recent context; older history could not be summarized"
+            : "Branched to new session",
+          4000,
+        )
       } catch (err) {
-        bus.emit("error", {
-          sessionId: sid,
-          error: err instanceof Error ? err : new Error(String(err)),
-        })
+        // Hard failure — branch may or may not have been created
+        if (childSessionId) {
+          const shortId = childSessionId.slice(0, 8)
+          const cause = err instanceof Error ? err.message : String(err)
+          bus.emit("error", {
+            sessionId: sid,
+            error: new Error(
+              `Steer failed: branch ${shortId} was created but could not be opened. Select it with /sessions. (${cause})`,
+            ),
+          })
+        } else {
+          const cause = err instanceof Error ? err.message : String(err)
+          bus.emit("error", {
+            sessionId: sid,
+            error: new Error(
+              `Steer failed; no branch was created. You remain in the current session and can retry /steer. ${cause}`,
+            ),
+          })
+        }
       } finally {
         if (!steeringEnded) bus.emit("steer-end", { sessionId: sid })
       }
