@@ -2470,5 +2470,213 @@
     "profile": "coder",
     "timeCreated": 1783833991525,
     "timeUpdated": 1783833991525
+  },
+  {
+    "id": "task_ZMd6ExCp5yVFMuS7",
+    "title": "Read the configuration file located at ~/.config/quark",
+    "description": "Read the configuration file located at ~/.config/quark",
+    "profile": "coder",
+    "timeCreated": 1783873015307,
+    "timeUpdated": 1783873027760
+  },
+  {
+    "id": "task_fZ7tFlhClu9UJmss",
+    "title": "Create an isolated TUI subagent card without inspecting the code, capture it using terminal controls, and provide a validation link.",
+    "description": "Create an isolated TUI subagent card without inspecting the code, capture it using terminal controls, and provide a validation link.",
+    "profile": "coder",
+    "timeCreated": 1783874601280,
+    "timeUpdated": 1783874604146
+  },
+  {
+    "id": "task_Pd4EJAsnvFIL9hoZ",
+    "title": "Use bash to run quark command with --sub-agent, --no-store, --profile finder, and --prompt flags to reply with exactly SUBAGENT_CARD_OK.",
+    "description": "Use bash to run quark command with --sub-agent, --no-store, --profile finder, and --prompt flags to reply with exactly SUBAGENT_CARD_OK.",
+    "profile": "coder",
+    "timeCreated": 1783875281599,
+    "timeUpdated": 1783875291033
+  },
+  {
+    "id": "task_GzHv2qOzNGNDl6vu",
+    "title": "Execute the quark command with --sub-agent --no-store --profile finder --prompt to research Quark and read src/session/session.ts.",
+    "description": "Execute the quark command with --sub-agent --no-store --profile finder --prompt to research Quark and read src/session/session.ts.",
+    "profile": "coder",
+    "timeCreated": 1783881297583,
+    "timeUpdated": 1783881307818
+  },
+  {
+    "id": "task_VBgg9PEdkFXJU4Xi",
+    "title": "Finder Understanding",
+    "description": "Finder Understanding",
+    "profile": "coder",
+    "timeCreated": 1783881397997,
+    "timeUpdated": 1783881405979
+  },
+  {
+    "id": "task_9x9tB4gyvxP0CnxB",
+    "title": "Call Finder to explore",
+    "description": "Call Finder to explore",
+    "profile": "coder",
+    "timeCreated": 1783881646095,
+    "timeUpdated": 1783881664080
+  },
+  {
+    "id": "task_g9IaKgFvIclu11lC",
+    "title": "Immediate Finder Call",
+    "description": "Immediate Finder Call",
+    "profile": "coder",
+    "timeCreated": 1783882268186,
+    "timeUpdated": 1783882289079
+  },
+  {
+    "id": "task_LB28ZQrgPYwmuNz1",
+    "title": "Call the finder tool to understand the codebase.",
+    "description": "Call the finder tool to understand the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783882459496,
+    "timeUpdated": 1783882469984
+  },
+  {
+    "id": "task_oximFMTHyz57A2wu",
+    "title": "Call the finder immediately",
+    "description": "Call the finder immediately",
+    "profile": "coder",
+    "timeCreated": 1783882677422,
+    "timeUpdated": 1783882697837
+  },
+  {
+    "id": "task_ZPayehJE7DiUrIsT",
+    "title": "Call the finder immediately to understand the codebase.",
+    "description": "Call the finder immediately to understand the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783882978591,
+    "timeUpdated": 1783882989731
+  },
+  {
+    "id": "task_9vR6gZZZaQRKxQ5s",
+    "title": "Call the finder to understand the whole codebase.",
+    "description": "Call the finder to understand the whole codebase.",
+    "profile": "coder",
+    "timeCreated": 1783883224553,
+    "timeUpdated": 1783883232854
+  },
+  {
+    "id": "task_gJM6YZuaKBJU7oLs",
+    "title": "Call the finder to understand the entire codebase.",
+    "description": "Call the finder to understand the entire codebase.",
+    "profile": "coder",
+    "timeCreated": 1783883398972,
+    "timeUpdated": 1783883420230
+  },
+  {
+    "id": "task_09BeH207zvgmafc6",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783883483962,
+    "timeUpdated": 1783883492585
+  },
+  {
+    "id": "task_j6FubkttzUYKnhT2",
+    "title": "Call the Finder tool to explore the codebase.",
+    "description": "Call the Finder tool to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783883592801,
+    "timeUpdated": 1783883598711
+  },
+  {
+    "id": "task_BjkXFCUQwrvhpOGl",
+    "title": "understand the subagent card",
+    "description": "understand the subagent card",
+    "profile": "coder",
+    "timeCreated": 1783921122535,
+    "timeUpdated": 1783921122535
+  },
+  {
+    "id": "task_SNAVuEOuItjwRmUI",
+    "title": "Call the Finder to explore the codebase",
+    "description": "Call the Finder to explore the codebase",
+    "profile": "coder",
+    "timeCreated": 1783921232320,
+    "timeUpdated": 1783921242534
+  },
+  {
+    "id": "task_PVstH4d5qHquP9k2",
+    "title": "Call the Finder tool to explore the codebase.",
+    "description": "Call the Finder tool to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783921932906,
+    "timeUpdated": 1783921942072
+  },
+  {
+    "id": "task_SkefncKc4Cam36Te",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783923131283,
+    "timeUpdated": 1783923143763
+  },
+  {
+    "id": "task_YVjjVXUUHw3Z4VT2",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783923552787,
+    "timeUpdated": 1783923559127
+  },
+  {
+    "id": "task_R1eGvTT7IpoCVRdQ",
+    "title": "Call the Finder tool to explore the codebase.",
+    "description": "Call the Finder tool to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783924187331,
+    "timeUpdated": 1783924195933
+  },
+  {
+    "id": "task_GHZBw9mkeVwv7cDi",
+    "title": "Invoke the Finder tool to thoroughly explore and analyze the codebase structure and components.",
+    "description": "Invoke the Finder tool to thoroughly explore and analyze the codebase structure and components.",
+    "profile": "coder",
+    "timeCreated": 1783924882118,
+    "timeUpdated": 1783924894876
+  },
+  {
+    "id": "task_BtPfvWMMLKMgK4V2",
+    "title": "Call the Finder tool to explore the codebase.",
+    "description": "Call the Finder tool to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783925604174,
+    "timeUpdated": 1783925614063
+  },
+  {
+    "id": "task_s9ExyX3QxZCPsnxI",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783925924928,
+    "timeUpdated": 1783925931502
+  },
+  {
+    "id": "task_qmvBXiHWXR2uvKNf",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783926315566,
+    "timeUpdated": 1783926324005
+  },
+  {
+    "id": "task_i8eC5clQr3kkf6Xw",
+    "title": "call the fucking Finder to explore the codebase",
+    "description": "call the fucking Finder to explore the codebase",
+    "profile": "coder",
+    "timeCreated": 1783927198380,
+    "timeUpdated": 1783927198380
+  },
+  {
+    "id": "task_OUh1ZqYabIp4SpZq",
+    "title": "Call the Finder to explore the codebase.",
+    "description": "Call the Finder to explore the codebase.",
+    "profile": "coder",
+    "timeCreated": 1783927214226,
+    "timeUpdated": 1783927226963
   }
 ]
