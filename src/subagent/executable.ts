@@ -59,8 +59,7 @@ export function resolveSubagentCommand(options: ResolveSubagentCommandOptions = 
       args: [...(exists(preload) ? ["--preload", preload] : []), sourceCli],
     }
   }
-
-  const bundledCli = path.join(root, "dist", "cli.js")
+ const bundledCli = path.join(root, "dist", "cli.js")
   if (exists(bundledCli)) return { command: execPath, args: [bundledCli] }
   throw new Error(`Unable to find the Quark CLI under ${root}`)
 }
