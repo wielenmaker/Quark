@@ -170,6 +170,11 @@ export function wireEvents(state: AppState) {
   }
   bus.on("worktree-switched", handleWorktreeSwitched)
 
+  const handleShipUpdate = (data: BusEvents["ship-update"]) => {
+    dispatch(state, { type: "ship-update", snapshot: data })
+  }
+  bus.on("ship-update", handleShipUpdate)
+
   // ---------------------------------------------------------------------------
   // Async panel side-session event routing (persistent, outside createComputed)
   // ---------------------------------------------------------------------------

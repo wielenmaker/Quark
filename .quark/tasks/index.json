@@ -2918,5 +2918,93 @@
     "profile": "coder",
     "timeCreated": 1784302513986,
     "timeUpdated": 1784302523985
+  },
+  {
+    "id": "task_5bReRZ6xKvtr30ST",
+    "title": "<directory path=\"bin/\" />",
+    "description": "<directory path=\"bin/\" />",
+    "profile": "coder",
+    "timeCreated": 1784306601165,
+    "timeUpdated": 1784306601165
+  },
+  {
+    "id": "task_c4KTOgRoeOeM8CG4",
+    "title": "Random File in Quark",
+    "description": "Random File in Quark",
+    "profile": "coder",
+    "timeCreated": 1784306670071,
+    "timeUpdated": 1784306690315
+  },
+  {
+    "id": "task_DkesEEYa1OZfC9gC",
+    "title": "<directory path=\".github/workflows/\" />",
+    "description": "<directory path=\".github/workflows/\" />",
+    "profile": "coder",
+    "timeCreated": 1784306990001,
+    "timeUpdated": 1784306990001
+  },
+  {
+    "id": "task_Dla39br9vB5jvCZa",
+    "title": "Dockerignore File Path",
+    "description": "Dockerignore File Path",
+    "profile": "coder",
+    "timeCreated": 1784307158533,
+    "timeUpdated": 1784307171247
+  },
+  {
+    "id": "task_iJsCKPA1g3b3gIcd",
+    "title": "Generate a random file URI.",
+    "description": "Generate a random file URI.",
+    "profile": "coder",
+    "timeCreated": 1784307195642,
+    "timeUpdated": 1784307205668
+  },
+  {
+    "id": "task_UXIk1KsRpGt3uO2a",
+    "title": "Implement Quark integration with the Ghostty API to set session titles on Ghostty terminal tabs.",
+    "description": "Implement Quark integration with the Ghostty API to set session titles on Ghostty terminal tabs.",
+    "profile": "coder",
+    "timeCreated": 1784369490901,
+    "timeUpdated": 1784369493953
+  },
+  {
+    "id": "task_XjjBCauO3ZvL6Ng7",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1784370465531,
+    "timeUpdated": 1784370467947
+  },
+  {
+    "id": "task_mGAAgOmAA0Wqkuqv",
+    "title": "Discuss with the oracle with this feature: I need a slash command for user to one-shot implement the feature of the application which include the whole life-cycle of the application. 1. Create a ticke",
+    "description": "Discuss with the oracle with this feature: I need a slash command for user to one-shot implement the feature of the application which include the whole life-cycle of the application. 1. Create a ticke",
+    "profile": "coder",
+    "timeCreated": 1784371600732,
+    "timeUpdated": 1784371600732
+  },
+  {
+    "id": "task_M7PxpmipbonFjL7B",
+    "title": "Greeting",
+    "description": "Greeting",
+    "profile": "coder",
+    "timeCreated": 1784527911056,
+    "timeUpdated": 1784527914342
+  },
+  {
+    "id": "task_r7SCRbeSU4rtSGhR",
+    "title": "A user should be able to submit one feature request and let Quark plan, implement, and verify it without manually coordinating multiple agent sessions.",
+    "description": "A user should be able to submit one feature request and let Quark plan, implement, and verify it without manually coordinating multiple agent sessions.",
+    "profile": "coder",
+    "timeCreated": 1784528331782,
+    "timeUpdated": 1784528361982
+  },
+  {
+    "id": "task_U4JhlODHUh5S0cQe",
+    "title": "Comprehend the Ship Command specification file located at specs/ship-command.md.",
+    "description": "Comprehend the Ship Command specification file located at specs/ship-command.md.",
+    "profile": "coder",
+    "timeCreated": 1784529880936,
+    "timeUpdated": 1784529894117
   }
 ]

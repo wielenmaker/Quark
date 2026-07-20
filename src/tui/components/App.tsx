@@ -48,6 +48,7 @@ import { writeClipboard } from "../clipboard"
 import { collectStatistics, renderStatisticsChart } from "../../commands/statistics"
 import { StatisticsPanel } from "./statistics-panel"
 import { AsyncPanel } from "./async-panel"
+import { ShipView } from "./ship-view"
 import { info as notifyInfo, warn as notifyWarn } from "../../notification/notification"
 import { getNextModel, getPrevModel } from "../model-cycle"
 import { buildPickerItems, pickerModeForCommand, type ChoicePickerMode } from "../picker-items"
@@ -62,7 +63,7 @@ interface AppProps {
   onSubmit: (text: string, sessionId: string | null, images?: { mime: string; data: string }[], context?: string) => void
   onCancel: (sessionId: string) => void
   onThinkingEffortChange?: (effort: string) => void
-  onCommand?: (command: string, args: string, sessionId: string | null) => Promise<CommandResult> | CommandResult | void
+  onCommand?: (command: string, args: string, sessionId: string | null, images?: { mime: string; data: string }[]) => Promise<CommandResult> | CommandResult | void
   onCreateAsyncSession?: () => string
   onOpenFile?: (target: FileTarget) => void
   getSessions?: () => SessionTreeInput[]
@@ -510,7 +511,7 @@ export const App: Component<AppProps> = (props) => {
   // Execute a slash command
   // ---------------------------------------------------------------------------
 
-  const executeCommand = (commandId: string, args: string) => {
+  const executeCommand = (commandId: string, args: string, images?: { mime: string; data: string }[]) => {
     if (commandId === "help") {
       const helpLines = filterCommands("", 99)
         .map((cmd) => `  /${cmd.id}${cmd.usage ? " " + cmd.usage : ""} — ${cmd.description}`)
@@ -551,7 +552,7 @@ export const App: Component<AppProps> = (props) => {
 
     // Delegate to backend handler
     if (props.onCommand) {
-      Promise.resolve(props.onCommand(commandId, args, state.store.sessionId))
+      Promise.resolve(props.onCommand(commandId, args, state.store.sessionId, images))
         .then((res) => {
           if (res?.handled && res.next === "sessions-picker") {
             openSessionsPicker()
@@ -761,8 +762,14 @@ export const App: Component<AppProps> = (props) => {
       const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim()
 
       if (commandId) {
-        executeCommand(commandId, args)
+        const images = commandId === "ship" ? pendingImages() : []
         setInputText("")
+        if (commandId === "ship") setPendingImages([])
+        executeCommand(
+          commandId,
+          args,
+          images.length > 0 ? images.map((img) => ({ mime: img.mime, data: img.data })) : undefined,
+        )
         return
       }
     }
@@ -1144,6 +1151,9 @@ export const App: Component<AppProps> = (props) => {
             )
           }}
         </Index>
+        <For each={state.store.shipRuns}>
+          {(run) => <ShipView run={run} />}
+        </For>
       </scrollbox>
 
       {/* Permission prompt */}
@@ -1176,7 +1186,7 @@ export const App: Component<AppProps> = (props) => {
         onSubmit={handleSubmit}
         onContentChange={handleInputChange}
         onRef={(r: TextareaRenderable) => { inputRef = r }}
-        disabled={state.store.running || !!state.store.permission || !!state.store.question}
+        disabled={state.store.running || state.store.shipRuns.some((run) => run.status === "running") || !!state.store.permission || !!state.store.question}
         placeholder=""
         tokensUsed={state.store.status.tokensUsed}
         tokenLimit={state.store.status.tokenLimit}

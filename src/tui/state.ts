@@ -9,6 +9,7 @@ import { getModelLimit } from "../provider/models"
 import { resolveProfile } from "../profile/profile"
 import { type ThinkingEffort, getThinkingLevels } from "../provider/thinking"
 import type { SubagentErrorKind } from "../subagent/protocol"
+import type { ShipUpdate } from "../session/events"
 
 // ---------------------------------------------------------------------------
 // Worktree types
@@ -183,6 +184,8 @@ export type TuiAction =
   | { type: "worktree-switch-start" }
   | { type: "worktree-switched"; cwd: string; activeWorktree: TuiWorktree | null; activeBranch: string | null; modelSpec: string; skillCount: number }
   | { type: "worktree-switch-failed"; message: string }
+  // /ship pipeline observability
+  | { type: "ship-update"; snapshot: ShipUpdate }
   // Async panel actions
   | { type: "open-async-panel"; sessionId: string | null; title: string }
   | { type: "set-async-session-id"; sessionId: string }
@@ -356,6 +359,7 @@ export interface AppStore {
   question?: QuestionRequest
   questionQueue: QuestionRequest[]
   asyncPanel: AsyncPanel | null
+  shipRuns: ShipUpdate[]
   /** Divider rows inserted after a branch — interleaved with messages in the scrollbox. */
   steerDividers: TuiSteerDivider[]
 }
@@ -399,6 +403,7 @@ export function createAppState(initial: {
     question: undefined,
     questionQueue: [],
     asyncPanel: null,
+    shipRuns: [],
     steerDividers: [],
   })
   return { store, setStore }
@@ -424,6 +429,7 @@ export function dispatch(state: AppState, action: TuiAction): void {
           s.error = undefined
           s.permission = undefined
           s.question = undefined
+          s.shipRuns = []
           s.steerDividers = []
         }),
       )
@@ -440,6 +446,7 @@ export function dispatch(state: AppState, action: TuiAction): void {
           s.status.cost = 0
           s.error = undefined
           s.permission = undefined
+          s.shipRuns = []
           s.steerDividers = []
         }),
       )
@@ -1122,6 +1129,19 @@ export function dispatch(state: AppState, action: TuiAction): void {
     }
 
     // ------------------------------------------------------------------
+    // /ship pipeline observability
+    // ------------------------------------------------------------------
+
+    case "ship-update": {
+      const index = state.store.shipRuns.findIndex((run) => run.runId === action.snapshot.runId)
+      if (index === -1) {
+        setStore("shipRuns", state.store.shipRuns.length, action.snapshot)
+      } else {
+        setStore("shipRuns", index, action.snapshot)
+      }
+      break
+    }
+
     // ------------------------------------------------------------------
     // Worktree actions
     // ------------------------------------------------------------------

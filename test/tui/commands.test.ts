@@ -77,14 +77,21 @@ describe("filterCommands", () => {
     expect(result[0]!.usage).toBeUndefined()
   })
 
-  test("s prefix matches sessions, settings, skills, steer, and statistics", () => {
+  test("s prefix includes ship with the other s commands", () => {
     const result = filterCommands("s")
-    expect(result.length).toBe(5)
+    expect(result.length).toBe(6)
     expect(result.map((c) => c.id)).toContain("sessions")
     expect(result.map((c) => c.id)).toContain("settings")
     expect(result.map((c) => c.id)).toContain("skills")
     expect(result.map((c) => c.id)).toContain("steer")
+    expect(result.map((c) => c.id)).toContain("ship")
     expect(result.map((c) => c.id)).toContain("statistics")
+  })
+
+  test("ship command has a feature request usage hint", () => {
+    const result = filterCommands("ship")
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ id: "ship", usage: "<feature-request>" })
   })
 
   test("r prefix matches reload-config only", () => {

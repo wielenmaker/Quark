@@ -31,10 +31,11 @@ import { clearCache as clearSkillCache } from "../skill/skill"
 import { register, clear as clearRegistry } from "../tool/registry"
 import { buildSkillTool } from "../tool/skill"
 import { resetBootstrap } from "../bootstrap"
-import { dismiss, getActive, info as notifyInfo } from "../notification/notification"
+import { dismiss, getActive, info as notifyInfo, error as notifyError } from "../notification/notification"
 import { undoLatest } from "../commands/undo"
 import { exportSessionToMarkdown } from "../commands/export"
 import { runGoal } from "../commands/goal/orchestrator"
+import { runShip } from "../commands/ship/orchestrator"
 import { authStatus } from "../commands/auth"
 import { firstRunAuthMessage, formatAuthStatuses } from "./auth-status"
 import { listTasks } from "../task/task"
@@ -245,7 +246,12 @@ async function handleWorktreeCommand(args: string, sid: string | null): Promise<
   return { handled: false }
 }
 
-async function handleCommand(command: string, args: string, sessionId: string | null): Promise<CommandResult> {
+async function handleCommand(
+  command: string,
+  args: string,
+  sessionId: string | null,
+  images?: { mime: string; data: string }[],
+): Promise<CommandResult> {
   const sid = sessionId ?? currentSession?.id ?? null
 
   // /new and /clear work even without an active session
@@ -443,6 +449,28 @@ async function handleCommand(command: string, args: string, sessionId: string | 
 
   if (command === "worktree") {
     return handleWorktreeCommand(args, sid)
+  }
+
+  // /ship owns its implementation session and can run before a conversation starts.
+  if (command === "ship") {
+    if (!args.trim()) {
+      notifyError("Ship", "Usage: /ship <feature-request>", 5000)
+      return { handled: true }
+    }
+
+    const result = await runShip({
+      featureRequest: args,
+      rootProjectDir,
+      sourceDir: process.cwd(),
+      sessionId: sid,
+      images,
+    })
+    if (result.passed) {
+      notifyInfo("Ship complete", result.prUrl ?? "Pull request created", 8000)
+    } else {
+      notifyError("Ship failed", result.reason ?? "Agent failed to implement the feature", 0)
+    }
+    return { handled: true }
   }
 
   // All other commands require an active session

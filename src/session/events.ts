@@ -11,6 +11,32 @@ import type { SubagentErrorKind } from "../subagent/protocol"
 
 // ---- Event types ----
 
+export type ShipPhaseId = "preflight" | "plan" | "implement" | "verify" | "publish"
+export type ShipPhaseStatus = "pending" | "running" | "pass" | "fail"
+
+export interface ShipPhaseSnapshot {
+  id: ShipPhaseId
+  status: ShipPhaseStatus
+  startedAt?: number
+  durationMs?: number
+  agent?: string
+  sessionId?: string
+}
+
+export interface ShipUpdate {
+  sessionId: string
+  runId: string
+  request: string
+  status: "running" | "passed" | "failed"
+  attempt: number
+  maxAttempts: number
+  branch?: string
+  worktreePath?: string
+  reason?: string
+  prUrl?: string
+  phases: ShipPhaseSnapshot[]
+}
+
 /**
  * All events emitted on the {@link bus}.
  *
@@ -131,6 +157,9 @@ export interface BusEvents {
 
   // Async panel opened — TUI should show the side panel
   "async-panel-open": { sessionId?: string; title: string }
+
+  // /ship pipeline snapshot — replaces the previous snapshot for this run
+  "ship-update": ShipUpdate
 
   // ---------------------------------------------------------------------------
   // Sub-agent observability — events forwarded from child `quark --sub-agent`

@@ -1055,3 +1055,40 @@ describe("dispatch: async-panel lifecycle", () => {
     })
   })
 })
+
+describe("dispatch: ship observability", () => {
+  const snapshot = {
+    sessionId: "s1",
+    runId: "ship-run-1",
+    request: "add export output",
+    status: "running" as const,
+    attempt: 1,
+    maxAttempts: 3,
+    branch: "ship/add-export-output-12345678",
+    phases: [
+      { id: "preflight" as const, status: "pass" as const },
+      { id: "plan" as const, status: "running" as const },
+      { id: "implement" as const, status: "pending" as const },
+      { id: "verify" as const, status: "pending" as const },
+      { id: "publish" as const, status: "pending" as const },
+    ],
+  }
+
+  test("replaces a run snapshot instead of appending duplicate cards", () => {
+    withRoot(() => {
+      const state = createAppState({ sessionId: "s1", modelName: "smart", skillCount: 0 })
+      dispatch(state, { type: "ship-update", snapshot })
+      dispatch(state, {
+        type: "ship-update",
+        snapshot: { ...snapshot, attempt: 2, reason: "A test still fails" },
+      })
+
+      expect(state.store.shipRuns).toHaveLength(1)
+      expect(state.store.shipRuns[0]).toMatchObject({
+        runId: "ship-run-1",
+        attempt: 2,
+        reason: "A test still fails",
+      })
+    })
+  })
+})

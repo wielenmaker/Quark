@@ -11,6 +11,8 @@
 
 import { parseArgs } from "util"
 import { createInterface } from "node:readline"
+import { readFileSync } from "node:fs"
+import { z } from "zod"
 import { bootstrap } from "./bootstrap"
 import { prompt } from "./session/prompt"
 import { resolveProfile, readPromptFile, listProfiles } from "./profile/profile"
@@ -89,6 +91,11 @@ Examples:
 `)
 }
 
+const imageFileSchema = z.array(z.object({
+  mime: z.string().min(1),
+  data: z.string().min(1),
+}).strict())
+
 interface ParsedArgs {
   profile?: string
   prompt?: string
@@ -97,6 +104,7 @@ interface ParsedArgs {
   model?: string
   subAgent?: boolean
   noStore?: boolean
+  imagesFile?: string
   verbose?: boolean
   listProfiles?: boolean
   help?: boolean
@@ -113,6 +121,7 @@ function parseArguments(): ParsedArgs {
         "parent-session": { type: "string" },
         "sub-agent": { type: "boolean" },
         "no-store": { type: "boolean" },
+        "images-file": { type: "string" },
         verbose: { type: "boolean" },
         "list-profiles": { type: "boolean", short: "l" },
         help: { type: "boolean", short: "h" },
@@ -158,6 +167,7 @@ function parseArguments(): ParsedArgs {
       model: values.model,
       subAgent: values["sub-agent"],
       noStore: values["no-store"],
+      imagesFile: values["images-file"],
       verbose: values.verbose,
       listProfiles: values["list-profiles"],
       help: values.help,
@@ -227,12 +237,23 @@ async function main() {
   // Resolve profile
   const profile = resolveProfile(args.profile)
   const promptResult = readPromptFile(profile)
-  const agent = agentFromProfile(profile, promptResult.content)
+  const configuredAgent = agentFromProfile(profile, promptResult.content)
+  const toolOverride = process.env.QUARK_AGENT_TOOLS
+    ?.split(",")
+    .map((tool) => tool.trim())
+    .filter(Boolean)
+  const agent = {
+    ...configuredAgent,
+    ...(toolOverride?.length ? { tools: toolOverride } : {}),
+    ...(process.env.QUARK_AUTO_ALLOW === "1"
+      ? { permissions: [{ tool: "*", action: "allow" as const }] }
+      : {}),
+  }
 
   // Bootstrap with profile tools and skills
   await bootstrap({
-    profileTools: profile.tools,
-    boundSkills: profile.skills,
+    profileTools: agent.tools,
+    boundSkills: agent.skills,
   })
 
   // When running as a sub-agent, stream structured events to stderr
@@ -301,12 +322,16 @@ async function main() {
   // Run the prompt
   try {
     const modelOverride = args.model ?? undefined
+    const images = args.imagesFile
+      ? imageFileSchema.parse(JSON.parse(readFileSync(args.imagesFile, "utf-8")))
+      : undefined
 
     const result = await prompt({
       sessionId: args.sessionId,
       parentSessionId: args.parentSessionId,
       ephemeral: args.noStore,
       parts: [{ type: "text", text: args.prompt }],
+      images,
       model: modelOverride,
       agent,
     })

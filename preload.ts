@@ -1,7 +1,3 @@
-// Local preload for @opentui/solid Bun plugin.
-// Inlined here so that @babel/core and friends resolve from the project
-// root node_modules instead of node_modules/@opentui/solid/node_modules
-// (which doesn't exist — they're hoisted to the project root).
 
 import { transformAsync } from "@babel/core"
 // @ts-expect-error - Types not important.

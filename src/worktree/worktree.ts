@@ -292,3 +292,25 @@ export async function createWorktree(input: {
     missing: false,
   }
 }
+
+/** Remove a clean worktree after its branch has been published. */
+export async function removeWorktree(input: {
+  rootProjectDir: string
+  worktreePath: string
+}): Promise<void> {
+  const proc = Bun.spawn(
+    ["git", "worktree", "remove", input.worktreePath],
+    {
+      cwd: input.rootProjectDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  )
+  const [exitCode, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stderr).text(),
+  ])
+  if (exitCode !== 0) {
+    throw new Error(`git worktree remove failed: ${stderr.trim()}`)
+  }
+}
