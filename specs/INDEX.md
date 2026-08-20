@@ -1,13 +1,14 @@
 ---
 title: Specs Index
 date_created: 2026-06-04
-date_modified: 2026-07-15
-revision: 4
+date_modified: 2026-08-20
+revision: 5
 history:
   - 2026-06-04: Initial classification and folder reorganization
   - 2026-06-07: Archived all done specs to specs/archives/
   - 2026-07-14: Added first-class subagent tool and child permission bridging plan
   - 2026-07-15: Added agent observability trace spec
+  - 2026-08-20: Added coding-agent session picker TUI comparison
 status: done
 ---
 
@@ -76,6 +77,7 @@ status: done
 | File | Status | Description |
 |---|---|---|
 | [tui-opentui-notes.md](surveys/tui-opentui-notes.md) | In Progress | Working notes for OpenTUI development — prop naming, theme wiring, ANSI compat |
+| [session-picker-tui-comparison.md](surveys/session-picker-tui-comparison.md) | Done | Live/source comparison of Quark, OpenCode, Amp, and Pi session selection UX |
 
 ## 🛠️ Tool Specs
 *Specifications for individual tools.*
