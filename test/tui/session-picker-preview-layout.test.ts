@@ -21,7 +21,6 @@ function renderPreview(): string {
           query: "",
           action: "browse",
           scope: "worktree",
-          preview: { user: "Fix the auth flow", assistant: "Auth flow inspected." },
         },
       }),
       { width: 140, height: 20, useConsole: false },
@@ -43,10 +42,11 @@ function renderPreview(): string {
   return JSON.parse(proc.stdout.toString().trim()) as string
 }
 
-describe("session picker preview layout", () => {
-  test("shows both transcript roles with only two session rows", () => {
+describe("session picker layout", () => {
+  test("does not show a transcript preview", () => {
     const frame = renderPreview()
-    expect(frame).toContain("You: Fix the auth flow")
-    expect(frame).toContain("Quark: Auth flow inspected.")
+    expect(frame).not.toContain("Preview")
+    expect(frame).not.toContain("You:")
+    expect(frame).not.toContain("Quark:")
   })
 })

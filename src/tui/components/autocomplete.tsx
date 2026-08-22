@@ -14,9 +14,7 @@ import { sessionQuickSwitchNumber, type SessionScope, type SessionTreeRow } from
 import type { WorktreePickerRow } from "../worktree-picker"
 import { CommandCard } from "./command-card"
 import { scrollTopForSelection } from "./autocomplete-scroll"
-import type { SessionPreview } from "../session-preview"
 import { sessionControls, type SessionAction } from "../session-controls"
-import { sessionPickerBodyHeight } from "../session-picker-layout"
 
 /** Maximum visible rows in the dropdown */
 const MAX_VISIBLE_ROWS = 5
@@ -40,7 +38,6 @@ export type AutocompleteMode =
     query: string
     action: SessionAction
     scope: SessionScope
-    preview: SessionPreview | null
   }
   | { type: "worktrees"; rows: WorktreePickerRow[]; selectedIndex: number }
   | { type: "models"; items: PickerItem[]; selectedIndex: number }
@@ -72,15 +69,6 @@ interface DropdownRow {
   fg: ColorInput
   bg: ColorInput
   bold: boolean
-}
-
-function previewText(preview: SessionPreview | null): string {
-  if (!preview?.user && !preview?.assistant) return "Preview\n\nNo transcript yet"
-  const clip = (text: string | null) => {
-    if (!text) return "—"
-    return text.length > 180 ? `${text.slice(0, 177)}…` : text
-  }
-  return `Preview\n\nYou: ${clip(preview.user)}\n\nQuark: ${clip(preview.assistant)}`
 }
 
 /**
@@ -254,9 +242,7 @@ const AutocompleteContent: Component<{ mode: AutocompleteMode | null }> = (props
   const visibleHeight = () => Math.min(rows().length, maxVisibleRows())
   const isSessionCard = () => m()?.type === "sessions" || m()?.type === "worktrees"
   const isSessionPicker = () => m()?.type === "sessions"
-  const bodyHeight = () => isSessionPicker()
-    ? sessionPickerBodyHeight(dims().width, visibleHeight(), maxVisibleRows())
-    : visibleHeight()
+  const bodyHeight = visibleHeight
   const panelBg = () => isSessionCard() ? colors.commandCardBg : colors.dropdownBg
   const panelHeight = () => isSessionCard() && rows().length > 0
     ? bodyHeight() + 2 + (isSessionPicker() ? 2 : 0)
@@ -301,29 +287,10 @@ const AutocompleteContent: Component<{ mode: AutocompleteMode | null }> = (props
                 : `Sessions · ${m()?.type === "sessions" && m()!.scope === "project" ? "all worktrees" : "this worktree"} — type to search`}
           </text>
         </box>
-        {sessionBody()}
+        {content()}
         <box height={1} backgroundColor={colors.commandCardBg}>
           <text fg={colors.muted} bg={colors.commandCardBg}>
             {sessionControls(dims().width, sessionMode()?.action ?? "browse")}
-          </text>
-        </box>
-      </box>
-    )
-    : content()
-
-  const sessionBody = () => dims().width >= 120 && m()?.type === "sessions"
-    ? (
-      <box flexDirection="row" height={bodyHeight()}>
-        <box flexGrow={1}>{content()}</box>
-        <box
-          width={Math.min(48, Math.floor(dims().width * 0.38))}
-          border={["left"]}
-          borderColor={colors.outline}
-          paddingLeft={1}
-          backgroundColor={colors.commandCardBg}
-        >
-          <text fg={colors.textDim} bg={colors.commandCardBg}>
-            {previewText(sessionMode()?.preview ?? null)}
           </text>
         </box>
       </box>
