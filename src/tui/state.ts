@@ -41,7 +41,7 @@ export interface TuiMessage {
 export type TuiPart =
   | { type: "text"; text: string; streaming?: boolean }
   | { type: "tool"; tool: string; callId: string; status: "pending" | "awaiting_approval" | "running" | "completed" | "error"; input: Record<string, unknown>; output?: string; error?: string; diff?: string; streamingContent?: string; subAgent?: SubAgentState }
-  | { type: "thinking"; done: boolean; text: string; startedAt?: number; durationMs?: number }
+  | { type: "thinking"; done: boolean; text: string; partId?: string; startedAt?: number; durationMs?: number }
   | { type: "image"; mime: string; data: string; label: string }
 
 /** Standalone divider row inserted into the message list after a branch. */
@@ -172,11 +172,11 @@ export type TuiAction =
   | { type: "subagent-error"; messageId: string; parentCallId: string; profile: string; kind: SubagentErrorKind; message: string }
   | { type: "cycle-thinking"; modelId: string }
   | { type: "toggle-show-thinking" }
-  | { type: "reasoning-start"; messageId: string }
+  | { type: "reasoning-start"; messageId: string; partId: string }
   | { type: "set-question"; request: QuestionRequest }
   | { type: "clear-question" }
   | { type: "reasoning-delta"; messageId: string; partId: string; delta: string; text: string }
-  | { type: "reasoning-end"; messageId: string }
+  | { type: "reasoning-end"; messageId: string; partId: string }
   | { type: "model-switched"; modelSpec: string; thinkingEffort?: ThinkingEffort; thinkingMode?: string }
   | { type: "truncate-messages"; upToMessageId: string; tokensUsed: number }
   | { type: "remove-message"; messageId: string }
@@ -820,7 +820,7 @@ export function dispatch(state: AppState, action: TuiAction): void {
         (m) => m.id === action.messageId,
         "parts",
         produce((parts: TuiPart[]) => {
-          parts.push({ type: "thinking", done: false, text: "", startedAt: Date.now() })
+          parts.push({ type: "thinking", done: false, text: "", partId: action.partId, startedAt: Date.now() })
         }),
       )
       break
@@ -831,9 +831,9 @@ export function dispatch(state: AppState, action: TuiAction): void {
         (m) => m.id === action.messageId,
         "parts",
         produce((parts: TuiPart[]) => {
-          const last = parts[parts.length - 1]
-          if (last && last.type === "thinking") {
-            last.text = action.text
+          const part = parts.find((part) => part.type === "thinking" && part.partId === action.partId)
+          if (part && part.type === "thinking") {
+            part.text = action.text
           }
         }),
       )
@@ -845,10 +845,10 @@ export function dispatch(state: AppState, action: TuiAction): void {
         (m) => m.id === action.messageId,
         "parts",
         produce((parts: TuiPart[]) => {
-          const last = parts[parts.length - 1]
-          if (last && last.type === "thinking") {
-            last.done = true
-            if (last.startedAt != null) last.durationMs = Date.now() - last.startedAt
+          const part = parts.find((part) => part.type === "thinking" && part.partId === action.partId)
+          if (part && part.type === "thinking") {
+            part.done = true
+            if (part.startedAt != null) part.durationMs = Date.now() - part.startedAt
           }
         }),
       )

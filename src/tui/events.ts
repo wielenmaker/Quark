@@ -542,7 +542,7 @@ export function wireEvents(state: AppState) {
     // ----- Reasoning / thinking events -----
 
     unsubs.push(on("reasoning-start", (data) => {
-      dispatch(state, { type: "reasoning-start", messageId: data.messageId })
+      dispatch(state, { type: "reasoning-start", messageId: data.messageId, partId: data.partId })
     }))
 
     unsubs.push(on("reasoning-delta", (data) => {
@@ -550,7 +550,7 @@ export function wireEvents(state: AppState) {
     }))
 
     unsubs.push(on("reasoning-end", (data) => {
-      dispatch(state, { type: "reasoning-end", messageId: data.messageId })
+      dispatch(state, { type: "reasoning-end", messageId: data.messageId, partId: data.partId })
     }))
 
     // ----- Undo -----

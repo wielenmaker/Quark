@@ -77,7 +77,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
   // Track tool parts by callId so we can update them as events arrive
   const toolParts = new Map<string, { partId: string; data: ToolPartData }>()
   let currentText: { partId: string; data: TextPartData } | undefined
-  let currentReasoning: { partId: string; data: ReasoningPartData } | undefined
+  const currentReasoning = new Map<string, { partId: string; data: ReasoningPartData }>()
   let lastFinish: string | undefined
   let needsBranch = false
   const aggregateTokens: TokenUsage = {}
@@ -88,6 +88,22 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
   const sid = input.sessionId
   const mid = input.msg.id
   const userMessageId = input.userMessageId
+
+  const finishReasoning = (reasoningId?: string) => {
+    const entries = reasoningId
+      ? [[reasoningId, currentReasoning.get(reasoningId)] as const]
+      : [...currentReasoning.entries()]
+    for (const [id, reasoning] of entries) {
+      if (!reasoning) continue
+      updatePart(reasoning.partId, reasoning.data, sid, mid, "reasoning")
+      bus.emit("reasoning-end", {
+        sessionId: sid,
+        messageId: mid,
+        partId: reasoning.partId,
+      })
+      currentReasoning.delete(id)
+    }
+  }
 
   while (true) {
     try {
@@ -347,35 +363,28 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               type: "reasoning",
               data,
             })
-            currentReasoning = { partId, data }
+            currentReasoning.set(event.id, { partId, data })
             bus.emit("reasoning-start", { sessionId: sid, messageId: mid, partId })
             break
           }
 
           case "reasoning-delta": {
-            if (currentReasoning) {
-              currentReasoning.data.text += event.text
+            const reasoning = currentReasoning.get(event.id)
+            if (reasoning) {
+              reasoning.data.text += event.text
               bus.emit("reasoning-delta", {
                 sessionId: sid,
                 messageId: mid,
-                partId: currentReasoning.partId,
+                partId: reasoning.partId,
                 delta: event.text,
-                text: currentReasoning.data.text,
+                text: reasoning.data.text,
               })
             }
             break
           }
 
           case "reasoning-end": {
-            if (currentReasoning) {
-              updatePart(currentReasoning.partId, currentReasoning.data, sid, mid, "reasoning")
-              bus.emit("reasoning-end", {
-                sessionId: sid,
-                messageId: mid,
-                partId: currentReasoning.partId,
-              })
-              currentReasoning = undefined
-            }
+            finishReasoning(event.id)
             break
           }
 
@@ -406,6 +415,9 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
         }
       }
       toolParts.clear()
+
+      // Finalize any reasoning block that ended without a provider event.
+      finishReasoning()
 
       // Flush any in-progress text
       if (currentText) {
@@ -490,6 +502,10 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
     }
 
     // Success path — finalize the message
+    // Some providers omit reasoning-end when the stream is interrupted by a
+    // step boundary or completion, so do not leave the TUI in Thinking state.
+    finishReasoning()
+
     // Mid-stream branching: if we broke out of the stream because of overflow,
     // finalize the current message and signal the loop to branch.
     if (needsBranch) {

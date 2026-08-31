@@ -73,6 +73,23 @@ describe("createAppState", () => {
 })
 
 describe("dispatch: thinking actions", () => {
+  test("finalizes the matching thought even when text follows reasoning", () => {
+    withRoot(() => {
+      const s = createAppState({ sessionId: "s1", modelName: "smart", skillCount: 0 })
+      dispatch(s, { type: "add-assistant-message", id: "m1" })
+      dispatch(s, { type: "reasoning-start", messageId: "m1", partId: "r1" })
+      dispatch(s, { type: "reasoning-delta", messageId: "m1", partId: "r1", delta: "", text: "thinking" })
+      dispatch(s, { type: "text-start", messageId: "m1" })
+      dispatch(s, { type: "text-end", messageId: "m1", text: "answer" })
+      dispatch(s, { type: "reasoning-end", messageId: "m1", partId: "r1" })
+
+      expect(s.store.messages[0]!.parts).toEqual([
+        expect.objectContaining({ type: "thinking", partId: "r1", done: true, text: "thinking" }),
+        expect.objectContaining({ type: "text", text: "answer", streaming: false }),
+      ])
+    })
+  })
+
   test("cycles configured effort and applies the active profile's effort on model switches", () => {
     withRoot(() => {
       const s = createAppState({ sessionId: "s1", modelName: "gpt-5", skillCount: 0, thinkingEffort: "high" })
