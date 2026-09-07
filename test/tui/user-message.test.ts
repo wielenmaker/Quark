@@ -57,16 +57,20 @@ describe("UserMessage lifecycle presentation", () => {
     expect(lines.flatMap((line) => line.spans).some((s) => (s.attributes & ITALIC_ATTR) !== 0)).toBe(true)
   })
 
-  test("renders a left border on every wrapped text line", () => {
+  test("renders a full-width top border and left border on wrapped lines", () => {
     const { frame } = renderUserMessage("sent", "one two three four five six seven", 14)
-    const messageLines = frame.split("\n").filter((line) => /\w/.test(line))
+    const lines = frame.split("\n")
+    const topBorder = lines.find((line) => line.includes("┌"))
+    const messageLines = lines.filter((line) => /\w/.test(line))
+
+    expect(topBorder).toMatch(/^┌─+\s*$/)
     expect(messageLines.length).toBeGreaterThan(1)
-    expect(messageLines.every((line) => line.startsWith("│"))).toBe(true)
+    expect(messageLines.slice(1).every((line) => line.startsWith("│"))).toBe(true)
   })
 
   test("colors replied text with the model status color", () => {
     const { lines } = renderUserMessage("replied")
-    const textSpan = lines[0]?.spans.find((span) => span.text.includes("lifecycle fixture"))
+    const textSpan = lines.flatMap((line) => line.spans).find((span) => span.text.includes("lifecycle fixture"))
     expect(textSpan?.fg?.buffer?.[0]).toBeCloseTo(95 / 255)
     expect(textSpan?.fg?.buffer?.[1]).toBeCloseTo(215 / 255)
     expect(textSpan?.fg?.buffer?.[2]).toBe(1)

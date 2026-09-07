@@ -24,7 +24,7 @@ export const UserMessage: Component<UserMessageProps> = (props) => {
   const barColor = () => failed() ? colors.error : colors.statusModel
 
   return (
-    <box flexDirection="column" border={["left"]} borderColor={barColor()} paddingLeft={1}>
+    <box flexDirection="column" width="100%" border={["left", "top"]} borderColor={barColor()} paddingLeft={1}>
       {/* Text line */}
       <text fg={foreground()}>{italic() ? <i>{cleaned()}</i> : cleaned()}</text>
 
