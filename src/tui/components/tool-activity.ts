@@ -7,10 +7,7 @@ export type ToolActivityItem =
   | { type: "part"; part: TuiPart }
   | { type: "activity"; kind: ToolActivityKind; tools: ToolPart[] }
 
-/**
- * Keep the latest tool activity open between model steps. An empty assistant
- * message is only a streaming placeholder; any actual non-tool part closes it.
- */
+/** Keep the latest tool activity open only while tools are the current work. */
 export function getContinuingToolCallId(messages: TuiMessage[], running: boolean): string | null {
   if (!running) return null
 
@@ -55,34 +52,32 @@ export function getToolActivityKind(tool: string): ToolActivityKind {
 /** Collapse adjacent, same-purpose tool calls into a single progressive activity. */
 export function groupMessageParts(parts: TuiPart[]): ToolActivityItem[] {
   const items: ToolActivityItem[] = []
+  let previousActivity: Extract<ToolActivityItem, { type: "activity" }> | undefined
 
   for (const part of parts) {
     if (part.type !== "tool" || part.subAgent) {
       items.push({ type: "part", part })
+      if (part.type === "tool") previousActivity = undefined
       continue
     }
 
     const kind = getToolActivityKind(part.tool)
-    const previous = items[items.length - 1]
-    if (previous?.type === "activity" && previous.kind === kind) {
-      previous.tools.push(part)
+    if (previousActivity?.kind === kind) {
+      previousActivity.tools.push(part)
     } else {
-      items.push({ type: "activity", kind, tools: [part] })
+      previousActivity = { type: "activity", kind, tools: [part] }
+      items.push(previousActivity)
     }
   }
 
   return items
 }
 
-function isToolOnlyAssistant(message: TuiMessage): boolean {
-  return message.role === "assistant"
-    && message.parts.length > 0
-    && message.parts.every((part) => part.type === "tool" && !part.subAgent)
-}
-
 /**
- * Join adjacent tool-only model steps so their same-purpose calls can render
- * as one activity. The array keeps its original indexes for steer dividers.
+ * Join adjacent assistant steps so same-purpose calls can render as one
+ * activity even when reasoning or text occurs between them. A different tool
+ * kind starts the next activity; user turns and steer dividers remain hard
+ * boundaries. The array keeps its original indexes for divider placement.
  */
 export function mergeToolActivityMessages(
   messages: TuiMessage[],
@@ -92,7 +87,7 @@ export function mergeToolActivityMessages(
 
   for (let start = 0; start < messages.length;) {
     const first = messages[start]!
-    if (!isToolOnlyAssistant(first)) {
+    if (first.role !== "assistant") {
       merged[start] = first
       start++
       continue
@@ -102,7 +97,7 @@ export function mergeToolActivityMessages(
     while (
       end < messages.length
       && !blockedInsertionIndexes.has(end)
-      && isToolOnlyAssistant(messages[end]!)
+      && messages[end]!.role === "assistant"
     ) {
       end++
     }

@@ -42,7 +42,7 @@ describe("tool activity grouping", () => {
     ])
   })
 
-  test("text and sub-agents remain independent timeline items", () => {
+  test("text and sub-agents remain visible timeline items", () => {
     const subAgent = tool("subagent") as Extract<TuiPart, { type: "tool" }>
     subAgent.subAgent = {
       profile: "finder",
@@ -59,28 +59,31 @@ describe("tool activity grouping", () => {
     ])
 
     expect(items.map((item) => item.type)).toEqual(["activity", "part", "part", "activity"])
+    expect(items.filter((item) => item.type === "activity")).toHaveLength(2)
   })
 
-  test("merges exploration calls across adjacent tool-only assistant messages", () => {
+  test("merges exploration calls across intervening assistant content", () => {
     const messages = mergeToolActivityMessages([
       assistant("grep-step", [tool("grep"), tool("glob")]),
+      assistant("thinking-step", [{ type: "thinking", done: true, text: "Inspecting the result" }]),
+      assistant("text-step", [{ type: "text", text: "Checking another file" }]),
       assistant("read-step", [tool("read")]),
     ])
 
-    expect(messages[1]).toBeUndefined()
+    expect(messages.slice(1).every((message) => message === undefined)).toBe(true)
     const items = groupMessageParts(messages[0]!.parts)
-    expect(items).toHaveLength(1)
+    expect(items.filter((item) => item.type === "activity")).toHaveLength(1)
     expect(items[0]).toMatchObject({ type: "activity", kind: "explore" })
     expect((items[0] as any).tools).toHaveLength(3)
   })
 
-  test("does not merge across visible content or a steer divider", () => {
-    const visibleBoundary = mergeToolActivityMessages([
+  test("does not merge across a user turn or steer divider", () => {
+    const userBoundary = mergeToolActivityMessages([
       assistant("grep-step", [tool("grep")]),
-      assistant("answer", [{ type: "text", text: "Found it" }]),
+      { id: "user", role: "user", parts: [{ type: "text", text: "Continue" }] },
       assistant("read-step", [tool("read")]),
     ])
-    expect(visibleBoundary.filter(Boolean)).toHaveLength(3)
+    expect(userBoundary.filter(Boolean)).toHaveLength(3)
 
     const dividerBoundary = mergeToolActivityMessages([
       assistant("grep-step", [tool("grep")]),
@@ -89,7 +92,7 @@ describe("tool activity grouping", () => {
     expect(dividerBoundary.filter(Boolean)).toHaveLength(2)
   })
 
-  test("keeps the latest activity open until non-tool output starts", () => {
+  test("stops the latest activity shimmer when thinking starts", () => {
     const completedGrep = tool("grep") as Extract<TuiPart, { type: "tool" }>
     completedGrep.callId = "grep-call"
 
@@ -102,6 +105,13 @@ describe("tool activity grouping", () => {
       assistant("grep-step", [completedGrep]),
       assistant("next-step", [{ type: "thinking", done: false, text: "" }]),
     ], true)).toBeNull()
+
+    const bash = tool("bash") as Extract<TuiPart, { type: "tool" }>
+    bash.callId = "bash-call"
+    expect(getContinuingToolCallId([
+      assistant("grep-step", [completedGrep]),
+      assistant("bash-step", [bash]),
+    ], true)).toBe("bash-call")
 
     expect(getContinuingToolCallId([assistant("grep-step", [completedGrep])], false)).toBeNull()
   })
@@ -188,7 +198,7 @@ describe("ToolActivity progressive disclosure", () => {
     expect(after).toContain("Grep needle")
   })
 
-  test("uses a live present-tense label while any call is active", () => {
+  test("uses a live present-tense label while an activity continues between calls", () => {
     const script = `
       import { testRender } from "@opentui/solid";
       import { createComponent } from "solid-js";
@@ -196,7 +206,8 @@ describe("ToolActivity progressive disclosure", () => {
       const setup = await testRender(
         () => createComponent(ToolActivity, {
           kind: "modify",
-          tools: [{ type: "tool", tool: "edit", callId: "1", status: "running", input: { path: "/src/a.ts" } }],
+          tools: [{ type: "tool", tool: "edit", callId: "1", status: "completed", input: { path: "/src/a.ts" } }],
+          continuingToolCallId: "1",
         }),
         { width: 80, height: 4, useConsole: false },
       );
