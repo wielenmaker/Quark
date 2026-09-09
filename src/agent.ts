@@ -20,6 +20,8 @@ export interface AgentConfig {
   tools: string[];
   /** Skill names bound to this agent (L1 metadata loaded into system prompt) */
   skills: string[];
+  /** Full skill instructions injected for this process only. */
+  runtimeSkills?: string[];
   /** Profile IDs of sub-agents this agent can spawn */
   subAgents?: string[];
   /** Model string to use for this agent. */

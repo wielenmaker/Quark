@@ -33,6 +33,10 @@ export function buildSystem(agent: AgentConfig): string[] {
   const skillBlock = buildSkillBlock(agent.skills)
   if (skillBlock) parts.push(skillBlock)
 
+  if (agent.runtimeSkills?.length) {
+    parts.push(...agent.runtimeSkills)
+  }
+
   // Sub-agent metadata
   const subAgentBlock = buildSubAgentBlock(agent.subAgents)
   if (subAgentBlock) parts.push(subAgentBlock)

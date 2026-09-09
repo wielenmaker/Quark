@@ -16,6 +16,8 @@ import { emitSubagentError, startEventWriter } from "./session/event-writer"
 import { loadConfig } from "./config/config"
 import { setVerbose, debug } from "./debug"
 import { formatArgs } from "./debug/format-tool-args"
+import { loadSkillFile } from "./skill/skill"
+import { flushTelemetry } from "./telemetry"
 
 const dlog = debug("cli")
 // Tool-call logging uses explicit uppercase prefixes (`[TOOL-CALL]`,
@@ -37,9 +39,9 @@ Usage: quark [options] [message]
 Options:
   -p, --profile <name>          Profile to use (default: from config)
   -m, --message <text>          Message text (alternative to positional)
+       --skill-file <path>       Inject a candidate SKILL.md for this run only
   -s, --session <id>            Resume an existing session
-      --watch <id>              View a running local session, read-only
-      --model <id>              Model to use for this run (e.g. copilot/claude-sonnet-4.5)
+            --model <id>              Model to use for this run (e.g. copilot/claude-sonnet-4.5)
       --no-store                Run an ephemeral session — never written to disk
       --verbose                 Print every tool call + result to stderr.
                                 For engine internals use QUARK_DEBUG=* (see README).
@@ -60,6 +62,7 @@ interface ParsedArgs {
   message?: string
   sessionId?: string
   model?: string
+  skillFile?: string
   noStore?: boolean
   verbose?: boolean
   listProfiles?: boolean
@@ -74,6 +77,7 @@ function parseArguments(): ParsedArgs {
         message: { type: "string", short: "m" },
         session: { type: "string", short: "s" },
         model: { type: "string" },
+        "skill-file": { type: "string" },
         "no-store": { type: "boolean" },
         verbose: { type: "boolean" },
         "list-profiles": { type: "boolean", short: "l" },
@@ -97,6 +101,7 @@ function parseArguments(): ParsedArgs {
       message,
       sessionId: values.session,
       model: values.model,
+      skillFile: values["skill-file"],
       noStore: values["no-store"],
       verbose: values.verbose,
       listProfiles: values["list-profiles"],
@@ -164,6 +169,9 @@ async function main() {
   const profile = resolveProfile(args.profile)
   const promptResult = readPromptFile(profile)
   const agent = agentFromProfile(profile, promptResult.content)
+  if (args.skillFile) {
+    agent.runtimeSkills = [loadSkillFile(args.skillFile)]
+  }
 
   // Bootstrap with profile tools and skills
   await bootstrap({
@@ -251,10 +259,12 @@ async function main() {
       process.stdout.write(`Resume the session with quark --session ${result.sessionId}\n`)
     }
     cleanupEventWriter?.()
+    await flushTelemetry()
     process.exit(0)
   } catch (err: any) {
     console.error("Error:", err.message)
     cleanupEventWriter?.()
+    await flushTelemetry()
     process.exit(1)
   }
 }

@@ -124,6 +124,21 @@ export function loadSkill(name: string): Skill | undefined {
   return skills.find((s) => s.name === name)
 }
 
+/** Read one candidate SKILL.md without adding it to the installed skill store. */
+export function loadSkillFile(filePath: string): string {
+  const resolvedPath = path.resolve(filePath)
+  let raw: string
+  try {
+    raw = fs.readFileSync(resolvedPath, "utf-8")
+  } catch (error) {
+    throw new Error(`Unable to read skill file ${resolvedPath}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  const { content } = parseFrontmatter(raw)
+  if (!content.trim()) throw new Error(`Skill file ${resolvedPath} has no instructions`)
+  return content.trim()
+}
+
 export function clearCache() {
   cache = null
 }
