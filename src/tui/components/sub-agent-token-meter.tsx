@@ -11,7 +11,10 @@ interface SubAgentTokenMeterProps {
   color: string | RGBA
 }
 
-const METER_CELL = "▉"
+// Each bar cell is 2 columns wide. `▎` is a visually quarter-width separator.
+// Terminals still reserve one character column for the separator glyph.
+const METER_CELL = "▄▄▎"
+const METER_CELL_WIDTH = 3
 
 function formatTokens(tokens: number): string {
   if (tokens < 1000) return String(tokens)
@@ -43,7 +46,7 @@ export const SubAgentTokenMeter: Component<SubAgentTokenMeterProps> = (props) =>
   // as roughly half the terminal width minus the label and padding.
   const meterSegments = () => Math.max(
     4,
-    Math.floor((dimensions().width - 1) * 0.5 - 5 - tokenLabel().length),
+    Math.floor(((dimensions().width - 1) * 0.5 - 5 - tokenLabel().length) / METER_CELL_WIDTH),
   )
 
   const filledSegments = () => {
