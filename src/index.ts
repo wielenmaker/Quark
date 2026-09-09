@@ -50,3 +50,26 @@ export {
 
 // Plugin types (for authoring plugins)
 export type { PluginFn, PluginContext, PluginHooks } from "./plugin/plugin"
+
+// Sanitized external telemetry
+export {
+  registerTelemetryAdapter,
+  emitTelemetry,
+  flushTelemetry,
+  createRunId,
+  clearTelemetryAdapters,
+  createSpanTelemetryAdapter,
+  createTelemetrySpanAdapter,
+} from "./telemetry"
+export type {
+  TelemetryAdapter,
+  TelemetryEvent,
+  TelemetryEventName,
+  TelemetryPayloads,
+  RunStatus,
+  TelemetryAttribute,
+  TelemetrySpan,
+  TelemetrySpanEvent,
+  TelemetrySpanExporter,
+  TelemetryTransport,
+} from "./telemetry"

@@ -40,6 +40,7 @@ import {
   type TokenUsage,
 } from "./accounting"
 import { debug } from "../debug"
+import { emitTelemetry } from "../telemetry"
 
 const dlog = debug("processor")
 
@@ -54,6 +55,8 @@ export interface ProcessInput {
   sessionId: string
   /** ID of the user message that initiated this turn. */
   userMessageId: string
+  /** Stable identifier for this run. */
+  runId?: string
   maxOutputTokens?: number
   /** Provider ID for plugin hooks (e.g. "copilot", "ollama") */
   providerId?: string
@@ -172,6 +175,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               data,
             })
             toolParts.set(event.id, { partId, data })
+            if (input.runId) emitTelemetry(input.runId, "tool.start", { sessionId: sid, tool: event.toolName, callId: event.id })
             bus.emit("tool-start", {
               sessionId: sid,
               messageId: mid,
@@ -227,6 +231,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               const subAgent = extractSubAgentMetadata(out)
               if (subAgent) match.data.subAgent = subAgent
               updatePart(match.partId, match.data, sid, mid, "tool")
+              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "completed" })
               bus.emit("tool-end", {
                 sessionId: sid,
                 messageId: mid,
@@ -249,6 +254,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               match.data.input = (event.input as Record<string, unknown>) ?? match.data.input
               match.data.error = String(event.error)
               updatePart(match.partId, match.data, sid, mid, "tool")
+              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "error" })
               bus.emit("tool-end", {
                 sessionId: sid,
                 messageId: mid,
@@ -439,6 +445,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
         }
         attempt++
         const delay = serverDelay ?? retryDelay(attempt)
+        if (input.runId) emitTelemetry(input.runId, "retry", { sessionId: sid, attempt, delayMs: delay })
         bus.emit("retry", { sessionId: sid, attempt, delayMs: delay, error: e })
         await sleep(delay, input.abort).catch(() => {})
         if (input.abort.aborted) break

@@ -153,6 +153,32 @@ environment variables such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and
 `OPENROUTER_API_KEY`. Quark reads environment variables but never edits shell
 startup files.
 
+### Telemetry adapters
+
+Telemetry is opt-in and configuration-free: no adapter is registered unless an
+SDK caller registers one, and Quark has no telemetry-related YAML or environment
+settings. The built-in contract emits sanitized lifecycle metadata only; prompts,
+tool inputs, outputs, and error details are not sent. Vendor SDKs are not required.
+
+Register an adapter in the host process and flush it during shutdown:
+
+```ts
+import { flushTelemetry, registerTelemetryAdapter } from "@quark/sdk"
+
+const unregister = registerTelemetryAdapter({
+  emit: (event) => transport.send(event),
+  flush: () => transport.flush(),
+})
+
+// On host shutdown:
+await flushTelemetry()
+unregister()
+```
+
+Adapter failures are isolated from the agent. Use `createSpanTelemetryAdapter`
+when a transport accepts completed span records; the transport remains the
+host application's responsibility.
+
 ---
 
 ## Profiles

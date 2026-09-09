@@ -35,6 +35,12 @@ import { bus } from "./events";
 import { fireHook } from "../plugin/registry";
 import { debug } from "../debug";
 import { setCurrentTurn, preTurnSnapshot } from "../commands/undo";
+import {
+  createRunId,
+  emitTelemetry,
+  telemetryErrorKind,
+  type RunStatus,
+} from "../telemetry";
 
 const dlog = debug("loop");
 
@@ -117,6 +123,8 @@ export async function prompt(input: {
     model: input.model,
     agent,
     forceAgent: !!input.parentSessionId,
+    runId: createRunId(),
+    resumed: !!input.sessionId,
   });
 }
 
@@ -138,6 +146,8 @@ export async function runSeededSession(input: {
     userText: input.userText,
     model: input.model,
     agent: input.agent ?? defaultAgent,
+    runId: createRunId(),
+    resumed: true,
   })
 }
 
@@ -148,8 +158,11 @@ async function runTurn(input: {
   model?: string
   agent: AgentConfig
   forceAgent?: boolean
+  runId: string
+  resumed: boolean
 }) {
-  const { sessionId, userMessageId, userText, model, agent } = input
+  const { sessionId, userMessageId, userText, model, agent, runId, resumed } = input
+  const startedAt = Date.now()
   process.env.QUARK_SESSION_ID = sessionId
   touchSession(sessionId)
 
@@ -160,8 +173,11 @@ async function runTurn(input: {
   if (input.forceAgent) setForceAgent(true)
   const controller = new AbortController()
   active.set(sessionId, controller)
+  emitTelemetry(runId, "run.start", { sessionId, resumed })
+  emitTelemetry(runId, "loop.start", { sessionId })
   bus.emit("loop-start", { sessionId })
   let finalSessionId = sessionId
+  let runStatus: RunStatus = "completed"
   const turnMessageIds = new Map<string, string>([[sessionId, userMessageId]])
   try {
     const session = getSession(sessionId)
@@ -180,7 +196,12 @@ async function runTurn(input: {
       agent,
       model,
       turnMessageIds,
+      runId,
     )
+  } catch (error) {
+    runStatus = controller.signal.aborted ? "aborted" : "error"
+    emitTelemetry(runId, "error", { sessionId: finalSessionId, kind: telemetryErrorKind(error) })
+    throw error
   } finally {
     // loop() can throw after moving to an automatic child branch, before its
     // return value updates finalSessionId. The newest mapping is authoritative.
@@ -202,6 +223,12 @@ async function runTurn(input: {
     for (const [id, activeController] of active) {
       if (activeController === controller) active.delete(id)
     }
+    emitTelemetry(runId, "loop.end", { sessionId: finalSessionId })
+    emitTelemetry(runId, "run.end", {
+      sessionId: finalSessionId,
+      status: runStatus,
+      durationMs: Date.now() - startedAt,
+    })
     bus.emit("loop-end", { sessionId: finalSessionId })
     fireHook("session.idle", { sessionId: finalSessionId }).catch(() => {})
   }
@@ -254,6 +281,7 @@ async function loop(
   agent: AgentConfig,
   modelOpt: string | undefined,
   turnMessageIds: Map<string, string>,
+  runId: string,
 ): Promise<string> {
   // Build the AI SDK model
   // Priority: explicit modelOpt > agent model
@@ -283,6 +311,8 @@ async function loop(
       dlog(`max_steps reached (${loadConfig().max_steps}), breaking`);
       break;
     }
+
+    emitTelemetry(runId, "step.start", { sessionId: currentSessionId, step })
 
     // Plugin hook: loop step beginning
     await fireHook("loop.step.before", { sessionId: currentSessionId, step });
@@ -395,6 +425,7 @@ async function loop(
       msg: assistantMsg,
       sessionId: currentSessionId,
       userMessageId: currentUserMessageId,
+      runId,
       providerId: resolvedModel.ref.providerId,
       modelId: resolvedModel.ref.modelId,
       rebuildModel: async (provider, modelId) => {
@@ -422,6 +453,7 @@ async function loop(
       step,
       result,
     });
+    emitTelemetry(runId, "step.end", { sessionId: currentSessionId, step, result });
 
     // 7. Decide next action
     if (result === "continue") continue;
