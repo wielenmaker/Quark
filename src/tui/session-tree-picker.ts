@@ -21,6 +21,7 @@ export type SessionTreeRow =
     running?: boolean
   }
   | { type: "orphan"; id: string; label: string; detail: string; current: boolean; running?: boolean }
+  | { type: "divider"; label: string }
   | { type: "spacer" }
 
 export interface SessionSearchResult {
@@ -81,8 +82,13 @@ export function buildSessionTreeRows(
   })
 
   const rows: SessionTreeRow[] = []
+  const hasPinned = ordered.some((group) => group.some((session) => session.pinned))
   for (let index = 0; index < ordered.length; index++) {
-    if (index > 0 && (ordered[index - 1]!.length > 1 || ordered[index]!.length > 1)) {
+    const pinned = ordered[index]!.some((session) => session.pinned)
+    const previousPinned = index > 0 && ordered[index - 1]!.some((session) => session.pinned)
+    if (hasPinned && (index === 0 || pinned !== previousPinned)) {
+      rows.push({ type: "divider", label: pinned ? "Pinned" : "Recent" })
+    } else if (index > 0 && (ordered[index - 1]!.length > 1 || ordered[index]!.length > 1)) {
       rows.push({ type: "spacer" })
     }
     rows.push(...sessionTreeRows(ordered[index]!, currentSessionId, now))

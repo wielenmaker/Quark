@@ -167,6 +167,18 @@ describe("session picker layout", () => {
     expect(frame).toContain("└─ Casual Conversation")
   })
 
+  test("renders pinned and recent session dividers", () => {
+    const frame = renderPreview(`
+      { type: "divider", label: "Pinned" },
+      { type: "session", id: "pinned", label: "Important work", detail: "pinned · now", current: true, root: false, guides: [], connector: "plain" },
+      { type: "divider", label: "Recent" },
+      { type: "session", id: "recent", label: "Recent work", detail: "1m ago", current: false, root: false, guides: [], connector: "plain" },
+    `)
+
+    expect(frame).toContain("Pinned")
+    expect(frame).toContain("Recent")
+  })
+
   test("opens from /sessions", () => {
     const frame = renderSessionPicker()
     const lines = frame.split("\n")

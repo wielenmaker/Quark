@@ -67,13 +67,18 @@ describe("session tree picker", () => {
     })
   })
 
-  test("shows pinned lineages before newer lineages", () => {
+  test("separates pinned lineages from recent sessions", () => {
     const rows = buildSessionTreeRows([
       { id: "newer", title: "Newer session", timeUpdated: day(5, 8) },
       { id: "pinned", title: "Pinned session", pinned: true, timeUpdated: day(5, 1) },
     ], null, day(5, 10))
 
-    expect(rows[0]).toMatchObject({ id: "pinned", detail: "pinned · 1w ago" })
+    expect(rows).toMatchObject([
+      { type: "divider", label: "Pinned" },
+      { id: "pinned", detail: "pinned · 1w ago" },
+      { type: "divider", label: "Recent" },
+      { id: "newer" },
+    ])
   })
 
   test("formats activity time for quick scanning", () => {
