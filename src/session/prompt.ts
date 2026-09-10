@@ -40,6 +40,7 @@ import {
   emitTelemetry,
   telemetryErrorKind,
   type RunStatus,
+  type TelemetryDiagnostics,
 } from "../telemetry";
 
 const dlog = debug("loop");
@@ -300,6 +301,10 @@ async function loop(
   let currentUserMessageId = userMessageId;
 
   let step = 0;
+  let stepDiagnostics: TelemetryDiagnostics = {
+    provider: effectiveProvider,
+    model: effectiveModel,
+  }
   while (true) {
     if (abort.aborted) break;
     step++;
@@ -312,7 +317,7 @@ async function loop(
       break;
     }
 
-    emitTelemetry(runId, "step.start", { sessionId: currentSessionId, step })
+    emitTelemetry(runId, "step.start", { sessionId: currentSessionId, step, ...stepDiagnostics })
 
     // Plugin hook: loop step beginning
     await fireHook("loop.step.before", { sessionId: currentSessionId, step });
@@ -428,6 +433,7 @@ async function loop(
       runId,
       providerId: resolvedModel.ref.providerId,
       modelId: resolvedModel.ref.modelId,
+      onTelemetryDiagnostics: (diagnostics) => { stepDiagnostics = diagnostics },
       rebuildModel: async (provider, modelId) => {
         const rebuilt = await resolveModelRuntime(`${provider}/${modelId}`)
         return {
@@ -453,7 +459,7 @@ async function loop(
       step,
       result,
     });
-    emitTelemetry(runId, "step.end", { sessionId: currentSessionId, step, result });
+    emitTelemetry(runId, "step.end", { sessionId: currentSessionId, step, result, ...stepDiagnostics });
 
     // 7. Decide next action
     if (result === "continue") continue;

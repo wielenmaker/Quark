@@ -5,6 +5,7 @@ import * as os from "node:os"
 import { parse as parseYAML, stringify as stringifyYAML } from "yaml"
 import type { BillingMode } from "../provider/definitions"
 import type { CredentialSourceConfig } from "../provider/credentials"
+import type { TelemetryConfig } from "../telemetry"
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "quark")
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.yaml")
@@ -48,6 +49,7 @@ export interface QuarkConfig {
   profiles?: Record<string, ProfileConfig>
   providers: Record<string, CustomProviderConfig>
   hide_readonly_tools: boolean
+  telemetry: TelemetryConfig
   /** Optional executable name/path used to open local file links. */
   editor?: string
   /** Compatibility projections; never serialized as V2 fields. */
@@ -91,6 +93,18 @@ function readRawConfig(): Record<string, unknown> {
 
 function nonEmptyString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback
+}
+
+function parseTelemetry(raw: unknown): TelemetryConfig {
+  if (raw === undefined) return { diagnostic: false }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("telemetry must be a mapping.")
+  }
+  const value = raw as Record<string, unknown>
+  if (value.diagnostic !== undefined && typeof value.diagnostic !== "boolean") {
+    throw new Error("telemetry.diagnostic must be a boolean.")
+  }
+  return { diagnostic: value.diagnostic === true }
 }
 
 function parseBranching(raw: unknown): BranchingConfig {
@@ -241,6 +255,7 @@ export function parseConfigV2(raw: Record<string, unknown>): QuarkConfig {
       ? raw.profiles as Record<string, ProfileConfig> : undefined,
     providers: parseCustomProviders(raw.providers),
     hide_readonly_tools: typeof raw.hide_readonly_tools === "boolean" ? raw.hide_readonly_tools : false,
+    telemetry: parseTelemetry(raw.telemetry),
     editor: typeof raw.editor === "string" && raw.editor.trim() ? raw.editor.trim() : undefined,
     legacy: false,
   })
@@ -283,6 +298,7 @@ function parseV1(raw: Record<string, unknown>): QuarkConfig {
     branching: parseBranching(raw.branching),
     providers: parseV1Providers(raw.providers),
     hide_readonly_tools: typeof raw.hide_readonly_tools === "boolean" ? raw.hide_readonly_tools : false,
+    telemetry: parseTelemetry(raw.telemetry),
     editor: typeof raw.editor === "string" && raw.editor.trim() ? raw.editor.trim() : undefined,
     legacy: true,
     models: legacyFavorites,
@@ -322,6 +338,7 @@ export function serializeConfig(config: QuarkConfig): string {
     ...(config.profiles ? { profiles: config.profiles } : {}),
     providers,
     hide_readonly_tools: config.hide_readonly_tools,
+    telemetry: config.telemetry,
     ...(config.editor ? { editor: config.editor } : {}),
   })
 }
@@ -383,7 +400,7 @@ export function registerProvider(id: string, config: ProviderConfig): void {
   runtimeProviders[normalized] = config
 }
 
-export function setConfigField<K extends "max_steps" | "branching" | "hide_readonly_tools">(
+export function setConfigField<K extends "max_steps" | "branching" | "hide_readonly_tools" | "telemetry">(
   key: K,
   value: QuarkConfig[K],
 ): void

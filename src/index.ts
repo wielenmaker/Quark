@@ -58,8 +58,11 @@ export {
   flushTelemetry,
   createRunId,
   clearTelemetryAdapters,
+  configureTelemetry,
+  isTelemetryDiagnosticModeEnabled,
   createSpanTelemetryAdapter,
   createTelemetrySpanAdapter,
+  TELEMETRY_SCHEMA_VERSION,
 } from "./telemetry"
 export type {
   TelemetryAdapter,
@@ -72,4 +75,7 @@ export type {
   TelemetrySpanEvent,
   TelemetrySpanExporter,
   TelemetryTransport,
+  TelemetryConfig,
+  TelemetryDiagnostics,
+  TelemetryTokenCounts,
 } from "./telemetry"

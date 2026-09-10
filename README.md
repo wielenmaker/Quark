@@ -155,10 +155,21 @@ startup files.
 
 ### Telemetry adapters
 
-Telemetry is opt-in and configuration-free: no adapter is registered unless an
-SDK caller registers one, and Quark has no telemetry-related YAML or environment
-settings. The built-in contract emits sanitized lifecycle metadata only; prompts,
-tool inputs, outputs, and error details are not sent. Vendor SDKs are not required.
+Telemetry is default-deny. No adapter is registered unless an SDK caller
+registers one, and diagnostic metadata stays disabled unless explicitly enabled
+in `~/.config/quark/config.yaml`:
+
+```yaml
+telemetry:
+  diagnostic: true
+```
+
+When enabled, diagnostic fields are limited to provider/model identifiers and
+normalized token counts: `input`, `inputNoCache`, `output`, `outputText`,
+`reasoning`, `cacheRead`, `cacheWrite`, and `total`. Prompts, tool
+inputs/outputs, raw provider responses, and error details
+are excluded. No raw content capture or transport is built in; the host owns
+adapter registration and transport.
 
 Register an adapter in the host process and flush it during shutdown:
 

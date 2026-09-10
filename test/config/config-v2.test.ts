@@ -45,6 +45,20 @@ describe("Config V2", () => {
     expect(serialized).not.toContain("protocol:")
   })
 
+  test("defaults telemetry diagnostics to denied and persists explicit opt-in", () => {
+    const config = parseConfigV2(representativeConfig())
+    expect(config.telemetry).toEqual({ diagnostic: false })
+
+    const enabled = parseConfigV2({ ...representativeConfig(), telemetry: { diagnostic: true } })
+    expect(enabled.telemetry).toEqual({ diagnostic: true })
+    expect(parse(serializeConfig(enabled))).toMatchObject({ telemetry: { diagnostic: true } })
+  })
+
+  test("strictly validates the persisted diagnostic opt-in", () => {
+    expect(() => parseConfigV2({ ...representativeConfig(), telemetry: { diagnostic: "true" } })).toThrow(/telemetry.diagnostic.*boolean/)
+    expect(() => parseConfigV2({ ...representativeConfig(), telemetry: true })).toThrow(/telemetry.*mapping/)
+  })
+
   test("preserves an optional editor setting", () => {
     const raw = representativeConfig() as Record<string, unknown>
     raw.editor = "code"

@@ -40,7 +40,7 @@ import {
   type TokenUsage,
 } from "./accounting"
 import { debug } from "../debug"
-import { emitTelemetry } from "../telemetry"
+import { emitTelemetry, type TelemetryDiagnostics } from "../telemetry"
 
 const dlog = debug("processor")
 
@@ -64,6 +64,8 @@ export interface ProcessInput {
   modelId?: string
   /** Provider-specific options (e.g. thinking budget for Anthropic) */
   providerOptions?: Record<string, JSONObject>
+  /** Receives sanitized usage metadata for the enclosing lifecycle step. */
+  onTelemetryDiagnostics?: (diagnostics: TelemetryDiagnostics) => void
   /**
    * Optional callback so provider.request.error plugins can switch provider/model
    * without creating a circular import between processor and prompt.
@@ -89,6 +91,10 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
   const sid = input.sessionId
   const mid = input.msg.id
   const userMessageId = input.userMessageId
+  const diagnostics = (): TelemetryDiagnostics => ({
+    provider: input.resolvedModel?.ref.providerId ?? input.providerId,
+    model: input.resolvedModel?.ref.modelId ?? input.modelId,
+  })
 
   while (true) {
     try {
@@ -175,7 +181,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               data,
             })
             toolParts.set(event.id, { partId, data })
-            if (input.runId) emitTelemetry(input.runId, "tool.start", { sessionId: sid, tool: event.toolName, callId: event.id })
+            if (input.runId) emitTelemetry(input.runId, "tool.start", { sessionId: sid, tool: event.toolName, callId: event.id, ...diagnostics() })
             bus.emit("tool-start", {
               sessionId: sid,
               messageId: mid,
@@ -231,7 +237,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               const subAgent = extractSubAgentMetadata(out)
               if (subAgent) match.data.subAgent = subAgent
               updatePart(match.partId, match.data, sid, mid, "tool")
-              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "completed" })
+              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "completed", ...diagnostics() })
               bus.emit("tool-end", {
                 sessionId: sid,
                 messageId: mid,
@@ -254,7 +260,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               match.data.input = (event.input as Record<string, unknown>) ?? match.data.input
               match.data.error = String(event.error)
               updatePart(match.partId, match.data, sid, mid, "tool")
-              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "error" })
+              if (input.runId) emitTelemetry(input.runId, "tool.end", { sessionId: sid, tool: match.data.tool, callId: event.toolCallId, status: "error", ...diagnostics() })
               bus.emit("tool-end", {
                 sessionId: sid,
                 messageId: mid,
@@ -284,6 +290,8 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
             lastFinish = event.finishReason
             const usage = event.usage
             const normalized = normalizeUsage(usage)
+            const telemetryDiagnostics = { ...diagnostics(), tokens: normalized.tokens }
+            input.onTelemetryDiagnostics?.(telemetryDiagnostics)
             const runtime = input.resolvedModel
             const charge = runtime
               ? calculateCharge(normalized.tokens, runtime.pricingSnapshot)

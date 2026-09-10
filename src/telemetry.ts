@@ -1,23 +1,60 @@
 // Sanitized, decoupled telemetry contract.
 // This module deliberately does not consume the agent event bus or message data.
 
+export interface TelemetryTokenCounts {
+  input?: number
+  inputNoCache?: number
+  output?: number
+  outputText?: number
+  reasoning?: number
+  cacheRead?: number
+  cacheWrite?: number
+  total?: number
+}
+
+export interface TelemetryDiagnostics {
+  provider?: string
+  model?: string
+  tokens?: TelemetryTokenCounts
+}
+
+type WithDiagnostics<T> = T & TelemetryDiagnostics
+
 export interface TelemetryPayloads {
-  "run.start": { sessionId: string; resumed: boolean }
-  "run.end": { sessionId: string; status: "completed" | "aborted" | "error"; durationMs: number }
-  "loop.start": { sessionId: string }
-  "loop.end": { sessionId: string }
-  "step.start": { sessionId: string; step: number }
-  "step.end": { sessionId: string; step: number; result: "stop" | "continue" | "branch" }
-  "tool.start": { sessionId: string; tool: string; callId: string }
-  "tool.end": { sessionId: string; tool: string; callId: string; status: "completed" | "error" }
-  retry: { sessionId: string; attempt: number; delayMs: number }
-  error: { sessionId: string; kind: "provider" | "tool" | "branch" | "unknown" }
+  "run.start": WithDiagnostics<{ sessionId: string; resumed: boolean }>
+  "run.end": WithDiagnostics<{ sessionId: string; status: "completed" | "aborted" | "error"; durationMs: number }>
+  "loop.start": WithDiagnostics<{ sessionId: string }>
+  "loop.end": WithDiagnostics<{ sessionId: string }>
+  "step.start": WithDiagnostics<{ sessionId: string; step: number }>
+  "step.end": WithDiagnostics<{ sessionId: string; step: number; result: "stop" | "continue" | "branch" }>
+  "tool.start": WithDiagnostics<{ sessionId: string; tool: string; callId: string }>
+  "tool.end": WithDiagnostics<{ sessionId: string; tool: string; callId: string; status: "completed" | "error" }>
+  retry: WithDiagnostics<{ sessionId: string; attempt: number; delayMs: number }>
+  error: WithDiagnostics<{ sessionId: string; kind: "provider" | "tool" | "branch" | "unknown" }>
+}
+
+export interface TelemetryConfig {
+  diagnostic: boolean
+}
+
+let telemetryConfig: TelemetryConfig = { diagnostic: false }
+
+/** Configure optional metadata capture. Raw content is never part of this contract. */
+export function configureTelemetry(config: Partial<TelemetryConfig>): void {
+  if (typeof config.diagnostic === "boolean") telemetryConfig.diagnostic = config.diagnostic
+}
+
+export function isTelemetryDiagnosticModeEnabled(): boolean {
+  return telemetryConfig.diagnostic
 }
 
 export type TelemetryEventName = keyof TelemetryPayloads
 
+export const TELEMETRY_SCHEMA_VERSION = 1 as const
+
 export type TelemetryEvent = {
   [K in TelemetryEventName]: TelemetryPayloads[K] & {
+    schemaVersion: typeof TELEMETRY_SCHEMA_VERSION
     name: K
     runId: string
     timestamp: number
@@ -48,6 +85,7 @@ export function emitTelemetry<K extends TelemetryEventName>(
   // must not accidentally become telemetry content.
   const safePayload = sanitizePayload(name, payload)
   const event = {
+    schemaVersion: TELEMETRY_SCHEMA_VERSION,
     name,
     runId,
     timestamp: Date.now(),
@@ -83,37 +121,49 @@ function sanitizePayload<K extends TelemetryEventName>(
   name: K,
   payload: TelemetryPayloads[K],
 ): TelemetryPayloads[K] {
+  const value = payload as unknown as TelemetryDiagnostics & Record<string, unknown>
+  const diagnostics = sanitizeDiagnostics(value)
   switch (name) {
     case "run.start":
-      return { sessionId: (payload as TelemetryPayloads["run.start"]).sessionId, resumed: (payload as TelemetryPayloads["run.start"]).resumed } as TelemetryPayloads[K]
-    case "run.end": {
-      const value = payload as TelemetryPayloads["run.end"]
-      return { sessionId: value.sessionId, status: value.status, durationMs: value.durationMs } as TelemetryPayloads[K]
-    }
+      return { sessionId: value.sessionId, resumed: value.resumed, ...diagnostics } as TelemetryPayloads[K]
+    case "run.end":
+      return { sessionId: value.sessionId, status: value.status, durationMs: value.durationMs, ...diagnostics } as TelemetryPayloads[K]
     case "loop.start":
     case "loop.end":
-      return { sessionId: (payload as { sessionId: string }).sessionId } as TelemetryPayloads[K]
+      return { sessionId: value.sessionId, ...diagnostics } as TelemetryPayloads[K]
     case "step.start":
-      return { sessionId: (payload as TelemetryPayloads["step.start"]).sessionId, step: (payload as TelemetryPayloads["step.start"]).step } as TelemetryPayloads[K]
-    case "step.end": {
-      const value = payload as TelemetryPayloads["step.end"]
-      return { sessionId: value.sessionId, step: value.step, result: value.result } as TelemetryPayloads[K]
-    }
-    case "tool.start": {
-      const value = payload as TelemetryPayloads["tool.start"]
-      return { sessionId: value.sessionId, tool: value.tool, callId: value.callId } as TelemetryPayloads[K]
-    }
-    case "tool.end": {
-      const value = payload as TelemetryPayloads["tool.end"]
-      return { sessionId: value.sessionId, tool: value.tool, callId: value.callId, status: value.status } as TelemetryPayloads[K]
-    }
-    case "retry": {
-      const value = payload as TelemetryPayloads["retry"]
-      return { sessionId: value.sessionId, attempt: value.attempt, delayMs: value.delayMs } as TelemetryPayloads[K]
-    }
+      return { sessionId: value.sessionId, step: value.step, ...diagnostics } as TelemetryPayloads[K]
+    case "step.end":
+      return { sessionId: value.sessionId, step: value.step, result: value.result, ...diagnostics } as TelemetryPayloads[K]
+    case "tool.start":
+      return { sessionId: value.sessionId, tool: value.tool, callId: value.callId, ...diagnostics } as TelemetryPayloads[K]
+    case "tool.end":
+      return { sessionId: value.sessionId, tool: value.tool, callId: value.callId, status: value.status, ...diagnostics } as TelemetryPayloads[K]
+    case "retry":
+      return { sessionId: value.sessionId, attempt: value.attempt, delayMs: value.delayMs, ...diagnostics } as TelemetryPayloads[K]
     case "error":
-      return { sessionId: (payload as TelemetryPayloads["error"]).sessionId, kind: (payload as TelemetryPayloads["error"]).kind } as TelemetryPayloads[K]
+      return { sessionId: value.sessionId, kind: value.kind, ...diagnostics } as TelemetryPayloads[K]
   }
+}
+
+function sanitizeDiagnostics(value: TelemetryDiagnostics): TelemetryDiagnostics {
+  if (!telemetryConfig.diagnostic) return {}
+  const diagnostics: TelemetryDiagnostics = {}
+  if (safeIdentifier(value.provider)) diagnostics.provider = value.provider
+  if (safeIdentifier(value.model)) diagnostics.model = value.model
+  if (value.tokens && typeof value.tokens === "object") {
+    const tokens: TelemetryTokenCounts = {}
+    for (const key of ["input", "inputNoCache", "output", "outputText", "reasoning", "cacheRead", "cacheWrite", "total"] as const) {
+      const token = value.tokens[key]
+      if (typeof token === "number" && Number.isFinite(token) && token >= 0) tokens[key] = token
+    }
+    if (Object.keys(tokens).length) diagnostics.tokens = tokens
+  }
+  return diagnostics
+}
+
+function safeIdentifier(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_./:@+\\-]{1,256}$/.test(value)
 }
 
 export function createRunId(): string {
@@ -134,12 +184,14 @@ export function telemetryErrorKind(error: unknown): TelemetryPayloads["error"]["
 export type TelemetryAttribute = string | number | boolean
 
 export interface TelemetrySpanEvent {
+  schemaVersion: typeof TELEMETRY_SCHEMA_VERSION
   name: string
   timestamp: number
   attributes: Readonly<Record<string, TelemetryAttribute>>
 }
 
 export interface TelemetrySpan {
+  schemaVersion: typeof TELEMETRY_SCHEMA_VERSION
   traceId: string
   spanId: string
   parentSpanId?: string
@@ -218,11 +270,12 @@ export function createSpanTelemetryAdapter(
         const root = rootFor(event)
         root.startTime = Math.min(root.startTime, timestamp)
         root.attributes.resumed = event.resumed
+        Object.assign(root.attributes, diagnosticAttributes(event))
         break
       }
       case "run.end": {
         const root = rootFor(event)
-        finish(root, timestamp, event.status === "completed" ? "ok" : "error", { status: event.status, duration_ms: event.durationMs })
+        finish(root, timestamp, event.status === "completed" ? "ok" : "error", { status: event.status, duration_ms: event.durationMs, ...diagnosticAttributes(event) })
         roots.delete(event.runId)
         break
       }
@@ -237,37 +290,37 @@ export function createSpanTelemetryAdapter(
         break
       }
       case "step.start": {
-        const step = makeSpan(event.runId, "step", timestamp, parentFor(event).spanId, { step: event.step, session_id: event.sessionId })
+        const step = makeSpan(event.runId, "step", timestamp, parentFor(event).spanId, { step: event.step, session_id: event.sessionId, ...diagnosticAttributes(event) })
         steps.set(stepKey(event.sessionId, event.step), step)
         break
       }
       case "step.end": {
         const key = stepKey(event.sessionId, event.step)
         const step = steps.get(key) ?? makeSpan(event.runId, "step", timestamp, parentFor(event).spanId, { step: event.step, session_id: event.sessionId })
-        finish(step, timestamp, event.result === "stop" ? "ok" : "unset", { result: event.result })
+        finish(step, timestamp, event.result === "stop" ? "ok" : "unset", { result: event.result, ...diagnosticAttributes(event) })
         steps.delete(key)
         break
       }
       case "tool.start": {
-        const tool = makeSpan(event.runId, "tool", timestamp, activeStep(event.runId, event.sessionId)?.spanId ?? parentFor(event).spanId, { tool: event.tool, session_id: event.sessionId })
+        const tool = makeSpan(event.runId, "tool", timestamp, activeStep(event.runId, event.sessionId)?.spanId ?? parentFor(event).spanId, { tool: event.tool, session_id: event.sessionId, ...diagnosticAttributes(event) })
         tools.set(toolKey(event.callId), tool)
         break
       }
       case "tool.end": {
         const key = toolKey(event.callId)
         const tool = tools.get(key) ?? makeSpan(event.runId, "tool", timestamp, activeStep(event.runId, event.sessionId)?.spanId ?? parentFor(event).spanId, { tool: event.tool, session_id: event.sessionId })
-        finish(tool, timestamp, event.status === "error" ? "error" : "ok", { status: event.status })
+        finish(tool, timestamp, event.status === "error" ? "error" : "ok", { status: event.status, ...diagnosticAttributes(event) })
         tools.delete(key)
         break
       }
       case "retry": {
-        const retry = makeSpan(event.runId, "retry", timestamp, activeStep(event.runId, event.sessionId)?.spanId ?? parentFor(event).spanId, { attempt: event.attempt, delay_ms: event.delayMs, session_id: event.sessionId })
+        const retry = makeSpan(event.runId, "retry", timestamp, activeStep(event.runId, event.sessionId)?.spanId ?? parentFor(event).spanId, { attempt: event.attempt, delay_ms: event.delayMs, session_id: event.sessionId, ...diagnosticAttributes(event) })
         finish(retry, timestamp, "unset")
         break
       }
       case "error": {
         const parent = activeStep(event.runId, event.sessionId) ?? loops.get(event.runId) ?? rootFor(event)
-        parent.events.push({ name: "error", timestamp, attributes: { kind: event.kind, session_id: event.sessionId } })
+        parent.events.push({ schemaVersion: TELEMETRY_SCHEMA_VERSION, name: "error", timestamp, attributes: { kind: event.kind, session_id: event.sessionId, ...diagnosticAttributes(event) } })
         break
       }
     }
@@ -306,8 +359,26 @@ function freezeSpan(span: MutableSpan): TelemetrySpan {
     startTime: span.startTime,
     endTime: span.endTime ?? span.startTime,
     status: span.status,
+    schemaVersion: TELEMETRY_SCHEMA_VERSION,
     attributes: Object.freeze({ ...span.attributes }),
-    events: Object.freeze(span.events.map((event) => ({ ...event, attributes: Object.freeze({ ...event.attributes }) }))),
+    events: Object.freeze(span.events.map((event) => ({ ...event, schemaVersion: TELEMETRY_SCHEMA_VERSION, attributes: Object.freeze({ ...event.attributes }) }))),
+  }
+}
+
+function diagnosticAttributes(value: TelemetryDiagnostics): Record<string, TelemetryAttribute> {
+  const diagnostics = sanitizeDiagnostics(value)
+  const tokens = diagnostics.tokens
+  return {
+    ...(diagnostics.provider ? { provider: diagnostics.provider } : {}),
+    ...(diagnostics.model ? { model: diagnostics.model } : {}),
+    ...(tokens?.input !== undefined ? { tokens_input: tokens.input } : {}),
+    ...(tokens?.inputNoCache !== undefined ? { tokens_input_no_cache: tokens.inputNoCache } : {}),
+    ...(tokens?.output !== undefined ? { tokens_output: tokens.output } : {}),
+    ...(tokens?.outputText !== undefined ? { tokens_output_text: tokens.outputText } : {}),
+    ...(tokens?.reasoning !== undefined ? { tokens_reasoning: tokens.reasoning } : {}),
+    ...(tokens?.cacheRead !== undefined ? { tokens_cache_read: tokens.cacheRead } : {}),
+    ...(tokens?.cacheWrite !== undefined ? { tokens_cache_write: tokens.cacheWrite } : {}),
+    ...(tokens?.total !== undefined ? { tokens_total: tokens.total } : {}),
   }
 }
 
