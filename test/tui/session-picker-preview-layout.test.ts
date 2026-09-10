@@ -91,6 +91,62 @@ function renderSessionPicker(): string {
   return JSON.parse(proc.stdout.toString().trim()) as string
 }
 
+function renderSessionActions(): { frame: string; commands: string[] } {
+  const script = `
+    import { testRender } from "@opentui/solid";
+    import { createComponent } from "solid-js";
+    import { App } from "./src/tui/components/App.tsx";
+
+    const commands = [];
+    const setup = await testRender(
+      () => createComponent(App, {
+        onSubmit() {},
+        onCancel() {},
+        onCommand(command) { commands.push(command); return { handled: true }; },
+        getSessions() {
+          return [{ id: "one", title: "Existing session", timeUpdated: Date.now() }];
+        },
+        getPaletteEntries() {
+          return [{
+            key: "command:sessions",
+            type: "command",
+            id: "sessions",
+            label: "/sessions",
+            searchText: ["/sessions", "sessions"],
+            action: { type: "command", commandId: "sessions" },
+          }];
+        },
+      }),
+      { width: 100, height: 20, useConsole: false },
+    );
+
+    await setup.renderOnce();
+    await setup.mockInput.typeText("/");
+    await setup.renderOnce();
+    await setup.mockInput.typeText("sessions");
+    await setup.renderOnce();
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    setup.mockInput.pressEnter();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    console.log(JSON.stringify({ frame, commands }));
+    setup.renderer.destroy();
+  `
+
+  const proc = Bun.spawnSync({
+    cmd: ["bun", "--preload", "./preload.ts", "-e", script],
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+
+  if (!proc.success) throw new Error(proc.stderr.toString())
+  return JSON.parse(proc.stdout.toString().trim()) as { frame: string; commands: string[] }
+}
+
 describe("session picker layout", () => {
   test("does not show a transcript preview or scope", () => {
     const frame = renderPreview()
@@ -118,5 +174,14 @@ describe("session picker layout", () => {
     expect(frame).toContain("Existing session")
     expect(lines[borderRow]!.indexOf("╭")).toBeGreaterThan(10)
     expect(borderRow).toBeLessThan(8)
+  })
+
+  test("opens a searchable actions menu with Ctrl+K", () => {
+    const { frame, commands } = renderSessionActions()
+    expect(frame).toContain("Session actions")
+    expect(frame).toContain("Pin session")
+    expect(frame).toContain("Rename session")
+    expect(frame).toContain("Search actions")
+    expect(commands).toEqual(["pin-session"])
   })
 })

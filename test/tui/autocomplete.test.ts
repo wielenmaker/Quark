@@ -83,9 +83,10 @@ describe("scrollTopForSelection", () => {
 })
 
 describe("session picker controls", () => {
-  test("uses a shorter key guide on narrow terminals", () => {
-    expect(sessionControls(140, "browse")).toContain("F3 pin")
-    expect(sessionControls(90, "browse")).not.toContain("F3 pin")
+  test("uses the actions menu shortcut at every width", () => {
+    expect(sessionControls(140, "browse")).toContain("Ctrl+K actions")
+    expect(sessionControls(90, "browse")).toContain("Ctrl+K actions")
+    expect(sessionControls(60, "browse")).toContain("Ctrl+K")
     expect(sessionControls(60, "browse").length).toBeLessThan(54)
   })
 

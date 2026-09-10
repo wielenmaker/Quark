@@ -243,6 +243,7 @@ export const App: Component<AppProps> = (props) => {
   let scroll: ScrollBoxRenderable | undefined
   let inputRef: TextareaRenderable | undefined
   let paletteInputRef: TextareaRenderable | undefined
+  let sessionActionInputRef: TextareaRenderable | undefined
   let customQuestionRef: TextareaRenderable | undefined
 
   // --- Local UI signals (not in the global store — ephemeral) ---
@@ -270,6 +271,9 @@ export const App: Component<AppProps> = (props) => {
   const [paletteSessionInputs, setPaletteSessionInputs] = createSignal<SessionTreeInput[]>([])
   const [paletteSessionRows, setPaletteSessionRows] = createSignal<SessionTreeRow[]>([])
   const [paletteSessionAction, setPaletteSessionAction] = createSignal<"browse" | "rename">("browse")
+  const [sessionActionMenuOpen, setSessionActionMenuOpen] = createSignal(false)
+  const [sessionActionQuery, setSessionActionQuery] = createSignal("")
+  const [sessionActionSelectedIndex, setSessionActionSelectedIndex] = createSignal(0)
   const [paletteWorktreeInputs, setPaletteWorktreeInputs] = createSignal<WorktreePickerRow[]>([])
   const [paletteWorktreeRows, setPaletteWorktreeRows] = createSignal<WorktreePickerRow[]>([])
   const [worktreeCreateError, setWorktreeCreateError] = createSignal<string | undefined>()
@@ -442,6 +446,9 @@ export const App: Component<AppProps> = (props) => {
     setPaletteSessionInputs([])
     setPaletteSessionRows([])
     setPaletteSessionAction("browse")
+    setSessionActionMenuOpen(false)
+    setSessionActionQuery("")
+    setSessionActionSelectedIndex(0)
     setPaletteWorktreeInputs([])
     setPaletteWorktreeRows([])
     setWorktreeCreateError(undefined)
@@ -490,6 +497,9 @@ export const App: Component<AppProps> = (props) => {
     setPaletteSessionInputs([])
     setPaletteSessionRows([])
     setPaletteSessionAction("browse")
+    setSessionActionMenuOpen(false)
+    setSessionActionQuery("")
+    setSessionActionSelectedIndex(0)
     setPaletteWorktreeInputs([])
     setPaletteWorktreeRows([])
     setWorktreeCreateError(undefined)
@@ -796,12 +806,73 @@ export const App: Component<AppProps> = (props) => {
     setPaletteSessionInputs(sessions)
     setPaletteSessionRows(sessionRows)
     setPaletteSessionAction("browse")
+    setSessionActionMenuOpen(false)
+    setSessionActionQuery("")
+    setSessionActionSelectedIndex(0)
     setPaletteSelectedIndex(firstSelectableSessionRow(
       sessionRows,
       preferredSessionId ?? result.firstMatchId ?? sid,
     ))
     setPaletteOpen(true)
     return true
+  }
+
+  const selectedSession = () => {
+    const selected = paletteSessionRows()[paletteSelectedIndex()]
+    if (selected?.type !== "session" && selected?.type !== "orphan") return undefined
+    return paletteSessionInputs().find((session) => session.id === selected.id)
+  }
+
+  const sessionActions = () => {
+    const session = selectedSession()
+    if (!session) return []
+    const query = sessionActionQuery().trim().toLowerCase()
+    return [
+      { id: "pin" as const, label: session.pinned ? "Unpin session" : "Pin session" },
+      { id: "rename" as const, label: "Rename session" },
+    ].filter((action) => !query || action.label.toLowerCase().includes(query))
+  }
+
+  const closeSessionActions = () => {
+    setSessionActionMenuOpen(false)
+    setSessionActionQuery("")
+    setSessionActionSelectedIndex(0)
+  }
+
+  const openSessionActions = () => {
+    if (paletteMode() !== "sessions" || paletteSessionAction() !== "browse" || !selectedSession()) return false
+    setSessionActionQuery("")
+    setSessionActionSelectedIndex(0)
+    setSessionActionMenuOpen(true)
+    return true
+  }
+
+  const updateSessionActionQuery = () => {
+    const query = sessionActionInputRef?.plainText ?? ""
+    setSessionActionQuery(query)
+    setSessionActionSelectedIndex(0)
+  }
+
+  const runSessionAction = async () => {
+    const session = selectedSession()
+    const action = sessionActions()[sessionActionSelectedIndex()]
+    if (!session || !action) return
+    if (action.id === "rename") {
+      closeSessionActions()
+      setPaletteSessionAction("rename")
+      setPaletteQuery(session.title ?? "")
+      return
+    }
+    try {
+      await props.onCommand?.(
+        "pin-session",
+        JSON.stringify({ id: session.id, pinned: !session.pinned }),
+        state.store.sessionId,
+      )
+      openSessionsPalette(session.id)
+    } catch (error) {
+      notifyWarn("Session actions", error instanceof Error ? error.message : String(error), 4000)
+    }
   }
 
   const openWorktreePicker = (): boolean => {
@@ -1429,7 +1500,22 @@ export const App: Component<AppProps> = (props) => {
     }
 
     if (paletteOpen()) {
-      if (evt.name === "up") {
+      const isSessionActionChord = (evt.ctrl || evt.super || evt.meta) && evt.name === "k"
+      if (sessionActionMenuOpen()) {
+        if (evt.name === "up") {
+          setSessionActionSelectedIndex((index) => Math.max(0, index - 1))
+        } else if (evt.name === "down") {
+          setSessionActionSelectedIndex((index) => Math.min(Math.max(0, sessionActions().length - 1), index + 1))
+        } else if (evt.name === "return") {
+          queueMicrotask(() => { void runSessionAction() })
+        } else if (evt.name === "escape") {
+          closeSessionActions()
+        } else {
+          return
+        }
+      } else if (isSessionActionChord && openSessionActions()) {
+        // The nested action menu owns the next input and keeps the session search intact.
+      } else if (evt.name === "up") {
         setPaletteSelectedIndex((index) => paletteMode() === "sessions"
           ? moveSessionRowSelection(paletteSessionRows(), index, -1)
           : paletteMode() === "worktrees"
@@ -1444,29 +1530,6 @@ export const App: Component<AppProps> = (props) => {
           : Math.min(Math.max(0, maximum), index + 1))
       } else if (evt.name === "return") {
         queueMicrotask(() => { void runPaletteSelection() })
-      } else if (paletteMode() === "sessions" && paletteSessionAction() === "browse" && evt.name === "f2") {
-        const selected = paletteSessionRows()[paletteSelectedIndex()]
-        if (selected?.type === "session" || selected?.type === "orphan") {
-          const title = paletteSessionInputs().find((session) => session.id === selected.id)?.title ?? ""
-          setPaletteSessionAction("rename")
-          setPaletteQuery(title)
-        }
-      } else if (paletteMode() === "sessions" && paletteSessionAction() === "browse" && evt.name === "f3") {
-        const selected = paletteSessionRows()[paletteSelectedIndex()]
-        if (selected?.type === "session" || selected?.type === "orphan") {
-          const session = paletteSessionInputs().find((item) => item.id === selected.id)
-          if (session && props.onCommand) {
-            void Promise.resolve(props.onCommand(
-              "pin-session",
-              JSON.stringify({ id: session.id, pinned: !session.pinned }),
-              state.store.sessionId,
-            ))
-              .then(() => openSessionsPalette(session.id))
-              .catch((error) => {
-                notifyWarn("Command palette", error instanceof Error ? error.message : String(error), 4000)
-              })
-          }
-        }
       } else if (evt.name === "escape") {
         if (paletteMode() === "connect-authorizing") {
           connectAbortController?.abort()
@@ -1895,6 +1958,13 @@ export const App: Component<AppProps> = (props) => {
         entries={paletteResults()}
         sessionRows={paletteSessionRows()}
         sessionAction={paletteSessionAction()}
+        sessionActionMenu={sessionActionMenuOpen() ? {
+          query: sessionActionQuery(),
+          actions: sessionActions(),
+          selectedIndex: sessionActionSelectedIndex(),
+          onInput: updateSessionActionQuery,
+          onRef: (ref) => { sessionActionInputRef = ref },
+        } : undefined}
         worktreeRows={paletteWorktreeRows()}
         worktreeError={worktreeCreateError()}
         selectedIndex={paletteSelectedIndex()}

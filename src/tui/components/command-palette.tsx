@@ -39,6 +39,14 @@ export interface ConnectPaletteView {
   result?: { kind: "success" | "info" | "error"; message: string }
 }
 
+export interface SessionActionMenu {
+  query: string
+  actions: { id: "pin" | "rename"; label: string }[]
+  selectedIndex: number
+  onInput: () => void
+  onRef?: (ref: TextareaRenderable) => void
+}
+
 export interface CommandPaletteProps {
   active: boolean
   query: string
@@ -49,6 +57,7 @@ export interface CommandPaletteProps {
   mode?: PaletteMode
   sessionRows?: SessionTreeRow[]
   sessionAction?: SessionAction
+  sessionActionMenu?: SessionActionMenu
   worktreeRows?: WorktreePickerRow[]
   worktreeError?: string
   connect?: ConnectPaletteView
@@ -61,7 +70,9 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
   const worktreeCreateMode = () => props.mode === "worktree-create"
   const entityMode = () => props.mode === "skills" || props.mode === "models" || props.mode === "connect-providers"
   const connectMode = () => props.mode?.startsWith("connect-") && props.mode !== "connect-providers"
+  const sessionActionMenuOpen = () => Boolean(props.sessionActionMenu)
   const width = () => Math.min(60, Math.max(12, dims().width - 4))
+  const left = () => Math.max(0, Math.floor((dims().width - width()) / 2))
   const maxVisibleSessions = () => Math.max(1, Math.min(MAX_VISIBLE_SESSIONS, dims().height - 8))
   const visible = () => {
     const entries = props.entries
@@ -112,9 +123,14 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
     ? connectHeight()
     : worktreeCreateMode()
       ? props.worktreeError ? 9 : 8
-      : sessionMode()
-        ? sessionRowCount() + 6
+        : sessionMode()
+          ? sessionRowCount() + 6
         : hasQuery() ? 4 + MAX_VISIBLE + (entityMode() || worktreeMode() ? 1 : 0) : 3
+  const top = () => Math.max(0, Math.floor((dims().height - 6 - height()) / 2))
+  const actionMenuWidth = () => Math.min(36, Math.max(20, dims().width - 6))
+  const actionMenuHeight = () => (props.sessionActionMenu?.actions.length ?? 0) + 5
+  const actionMenuLeft = () => Math.max(0, left() + width() - actionMenuWidth() - 2)
+  const actionMenuTop = () => Math.max(0, top() + height() - actionMenuHeight() - 1)
   const truncate = (value: string, maximum: number) => {
     const chars = Array.from(value)
     if (chars.length <= maximum) return value
@@ -128,7 +144,8 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
 
   return (
     <Show when={props.active}>
-      <box position="absolute" left={Math.max(0, Math.floor((dims().width - width()) / 2))} top={Math.max(0, Math.floor((dims().height - 6 - height()) / 2))} width={width()} height={height()} flexDirection="column" borderStyle="rounded" borderColor={colors.outline} backgroundColor={colors.commandCardBg}>
+      <>
+      <box position="absolute" left={left()} top={top()} width={width()} height={height()} flexDirection="column" borderStyle="rounded" borderColor={colors.outline} backgroundColor={colors.commandCardBg} opacity={sessionActionMenuOpen() ? 0.45 : 1}>
         <Show when={connectMode()}>
           <box height={1} paddingX={1} backgroundColor={colors.commandCardBg}>
             <text fg={colors.text} bg={colors.commandCardBg} bold>
@@ -170,7 +187,7 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
           </Show>
           <Show when={!worktreeCreateMode()}>
           <Show when={sessionMode() || worktreeMode() || entityMode()}><box height={1} paddingX={1} backgroundColor={colors.commandCardBg}><text fg={colors.text} bg={colors.commandCardBg} bold>{sessionMode() ? props.sessionAction === "rename" ? "Rename session" : "Sessions" : worktreeMode() ? "Worktrees" : props.mode === "models" ? "Models" : props.mode === "connect-providers" ? "Connect a provider" : "Skills"}</text></box></Show>
-          <box height={1} paddingX={1} flexDirection="row" backgroundColor={colors.commandCardBg}><text fg={colors.statusModel} bg={colors.commandCardBg}>{"> "}</text><textarea ref={(ref: TextareaRenderable) => props.onRef?.(ref)} focused height={1} flexGrow={1} value={props.query} placeholder={sessionMode() ? "Search sessions" : worktreeMode() ? "Search worktrees" : props.mode === "skills" ? "Search skills" : props.mode === "models" ? "Search models" : props.mode === "connect-providers" ? "Search providers" : "Search anything in Quark"} placeholderColor={colors.muted} textColor={colors.text} focusedTextColor={colors.text} cursorColor={colors.cursorColor} cursorStyle={{ style: "block", blinking: true }} onContentChange={() => props.onInput()} /></box>
+          <box height={1} paddingX={1} flexDirection="row" backgroundColor={colors.commandCardBg}><text fg={colors.statusModel} bg={colors.commandCardBg}>{"> "}</text><textarea ref={(ref: TextareaRenderable) => props.onRef?.(ref)} focused={!sessionActionMenuOpen()} height={1} flexGrow={1} value={props.query} placeholder={sessionMode() ? "Search sessions" : worktreeMode() ? "Search worktrees" : props.mode === "skills" ? "Search skills" : props.mode === "models" ? "Search models" : props.mode === "connect-providers" ? "Search providers" : "Search anything in Quark"} placeholderColor={colors.muted} textColor={colors.text} focusedTextColor={colors.text} cursorColor={colors.cursorColor} cursorStyle={{ style: "block", blinking: true }} onContentChange={() => props.onInput()} /></box>
           <Show when={sessionMode() || rows() > 0}><box height={1} backgroundColor={colors.commandCardBg}><text fg={colors.outline} bg={colors.commandCardBg}>{"─".repeat(Math.max(0, width() - 2))}</text></box></Show>
           <Show when={!sessionMode() && !worktreeMode() && props.query.trim() && props.entries.length === 0}><box height={1} paddingX={1} backgroundColor={colors.commandCardBg}><text fg={colors.muted} bg={colors.commandCardBg}>No results</text></box></Show>
           <Show when={sessionMode() && (props.sessionRows?.length ?? 0) === 0}><box height={1} paddingX={1} backgroundColor={colors.commandCardBg}><text fg={colors.muted} bg={colors.commandCardBg}>No sessions found</text></box></Show>
@@ -199,6 +216,15 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
           </Show>
         </Show>
       </box>
+      <Show when={props.sessionActionMenu}>{(menu) => (
+        <box position="absolute" left={actionMenuLeft()} top={actionMenuTop()} width={actionMenuWidth()} height={actionMenuHeight()} flexDirection="column" borderStyle="rounded" borderColor={colors.outline} backgroundColor={colors.commandCardBg}>
+          <box height={1} paddingX={1} backgroundColor={colors.commandCardBg}><text fg={colors.text} bg={colors.commandCardBg} bold>Session actions</text></box>
+          <For each={menu().actions}>{(action, index) => <box height={1} paddingX={1} backgroundColor={colors.commandCardBg}><text fg={index() === menu().selectedIndex ? colors.statusModel : colors.text} bg={colors.commandCardBg} bold={index() === menu().selectedIndex}>{index() === menu().selectedIndex ? "❯ " : "  "}{action.label}</text></box>}</For>
+          <box height={1} backgroundColor={colors.commandCardBg}><text fg={colors.outline} bg={colors.commandCardBg}>{"─".repeat(Math.max(0, actionMenuWidth() - 2))}</text></box>
+          <box height={1} paddingX={1} flexDirection="row" backgroundColor={colors.commandCardBg}><text fg={colors.statusModel} bg={colors.commandCardBg}>{"> "}</text><textarea ref={(ref: TextareaRenderable) => menu().onRef?.(ref)} focused height={1} flexGrow={1} value={menu().query} placeholder="Search actions" placeholderColor={colors.muted} textColor={colors.text} focusedTextColor={colors.text} cursorColor={colors.cursorColor} onContentChange={() => menu().onInput()} /></box>
+        </box>
+      )}</Show>
+      </>
     </Show>
   )
 }
