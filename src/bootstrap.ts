@@ -13,6 +13,7 @@ import { ensureStorageRoot } from "./storage/session-jsonl";
 import { loadProfileTools } from "./tool/loader";
 import { loadPlugins } from "./plugin/loader";
 import { loadConfig } from "./config/config";
+import { configureTelemetry } from "./telemetry";
 
 let initialized = false;
 
@@ -51,6 +52,8 @@ export interface BootstrapOptions {
 export async function bootstrap(opts?: BootstrapOptions): Promise<void> {
   if (initialized) return;
   initialized = true;
+
+  configureTelemetry(loadConfig().telemetry);
 
   // Ensure session storage directory exists
   ensureStorageRoot();
