@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quark.fullname" . }}
+  labels:
+    {{- include "quark.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "quark.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "quark.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: quark
+          image: {{ printf "%s:%s" .Values.image.repository (required "image.tag must be an immutable sha-<commit> tag" .Values.image.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image starts with `bun run web:serve`, which requires /app's
+          # package.json. Invoke the server directly so Quark can use the
+          # persistent /workspace as its process working directory.
+          command: ["bun"]
+          args: ["/app/web/server.ts"]
+          env:
+            - name: PORT
+              value: {{ .Values.service.port | quote }}
+            - name: QUARK_CONVERSATION_HISTORY_DIR
+              value: /var/lib/quark/conversations
+            - name: QUARK_SESSION_METADATA_DIR
+              value: /var/lib/quark/session-metadata
+          {{- if or .Values.credentials.existingSecret .Values.credentials.secretData }}
+          envFrom:
+            - secretRef:
+                name: {{ default (printf "%s-credentials" (include "quark.fullname" .)) .Values.credentials.existingSecret }}
+          {{- end }}
+          volumeMounts:
+            - name: conversation-history
+              mountPath: /var/lib/quark/conversations
+            - name: session-metadata
+              mountPath: /var/lib/quark/session-metadata
+            # Quark reads global config, OAuth tokens, and file-backed
+            # credentials beneath $HOME/.config/quark ($HOME is /root).
+            - name: config
+              mountPath: /root/.config/quark
+            - name: working-directory
+              mountPath: /workspace
+            {{- if .Values.credentials.csi.enabled }}
+            - name: credentials-csi
+              mountPath: /mnt/quark-credentials
+              readOnly: true
+            {{- end }}
+          workingDir: /workspace
+      volumes:
+        - name: conversation-history
+          persistentVolumeClaim:
+            claimName: {{ include "quark.fullname" . }}-conversation-history
+        - name: session-metadata
+          persistentVolumeClaim:
+            claimName: {{ include "quark.fullname" . }}-session-metadata
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "quark.fullname" . }}-config
+        - name: working-directory
+          persistentVolumeClaim:
+            claimName: {{ include "quark.fullname" . }}-working-directory
+        {{- if .Values.credentials.csi.enabled }}
+        - name: credentials-csi
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ required "credentials.csi.secretProviderClass is required when CSI is enabled" .Values.credentials.csi.secretProviderClass }}
+        {{- end }}

@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/huypham37/quark
+  # Use an immutable image tag, for example sha-<full-commit-sha>.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 4173
+
+persistence:
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  conversationHistory:
+    size: 10Gi
+  sessionMetadata:
+    size: 1Gi
+  config:
+    size: 1Gi
+  workingDirectory:
+    size: 10Gi
+
+# Credentials are injected as environment variables (for example OPENAI_API_KEY).
+# Provide either existingSecret or secretData. CSI mounts credentials instead.
+credentials:
+  existingSecret: ""
+  secretData: {}
+  csi:
+    enabled: false
+    secretProviderClass: ""
+
+imagePullSecrets: []

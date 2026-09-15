@@ -1,0 +1,24 @@
+{{- $root := . -}}
+{{- range $name, $volume := dict
+  "conversation-history" .Values.persistence.conversationHistory
+  "session-metadata" .Values.persistence.sessionMetadata
+  "config" .Values.persistence.config
+  "working-directory" .Values.persistence.workingDirectory
+}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "quark.fullname" $root }}-{{ $name }}
+  labels:
+    {{- include "quark.labels" $root | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml $root.Values.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ default $root.Values.persistence.size $volume.size }}
+  {{- with $root.Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
