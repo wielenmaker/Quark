@@ -1,4 +1,4 @@
-// Versioned Quark configuration. V2 never persists credential values.
+// Versioned Quark configuration.
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"

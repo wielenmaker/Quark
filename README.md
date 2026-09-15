@@ -117,12 +117,7 @@ made through `/settings` apply automatically when the editor closes successfully
 version: 2
 
 models:
-  main: openrouter/anthropic/claude-sonnet-4.6
   small: openai/gpt-5-mini
-  favorites:
-    - openrouter/anthropic/claude-sonnet-4.6
-    - openai/gpt-5
-    - copilot/claude-sonnet-4.6
 
 max_steps: 100
 
@@ -136,17 +131,14 @@ branching:
 # Only endpoints Quark does not bundle belong here.
 providers:
   quark-go:
-    protocol: openai-compatible
-    endpoint: https://api.quark-go.example/v1
-    credential:
-      source: environment
-      variable: QUARK_GO_API_KEY
-    billing: subscription
+    base_url: https://api.quark-go.example/v1
+    api_key: env:QUARK_GO_API_KEY
 ```
 
 Standard providers require no `providers:` entry. Authenticate interactively with
 `quark auth login openrouter`, or set a user-managed environment variable for
-headless use. API-key values are never accepted in V2 configuration.
+headless use. Custom providers accept `base_url` and an optional `api_key`; use
+an `env:NAME` reference to keep the key out of the configuration file.
 
 OpenCode Go is bundled as `opencode-go`. After subscribing and copying your key,
 run `quark auth login opencode-go` (or set `OPENCODE_API_KEY`) and select a model
