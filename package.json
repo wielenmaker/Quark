@@ -23,8 +23,11 @@
   },
   "scripts": {
     "build": "tsup && tsc --project tsconfig.build.json --emitDeclarationOnly",
-    "typecheck": "tsc --project tsconfig.build.json --noEmit",
+    "typecheck": "tsc --project tsconfig.build.json --noEmit && tsc --project tsconfig.web.json --noEmit",
     "dev": "bun --preload ./preload.ts src/tui/index.tsx",
+    "web": "bun web/dev.ts",
+    "web:build": "vite build --config web/vite.config.ts",
+    "web:serve": "bun web/server.ts",
     "cli": "bun --preload ./preload.ts src/cli.ts",
     "prepublishOnly": "bun run build",
     "docs": "typedoc"
@@ -34,7 +37,9 @@
     "@types/node": "^25.5.0",
     "tsup": "^8.5.1",
     "typedoc": "^0.28.18",
-    "typedoc-plugin-markdown": "^4.11.0"
+    "typedoc-plugin-markdown": "^4.11.0",
+    "vite": "^7.1.5",
+    "vite-plugin-solid": "^2.11.8"
   },
   "peerDependencies": {
     "typescript": "^6.0.2"
@@ -45,12 +50,9 @@
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@opentui/core": "^0.1.86",
     "@opentui/solid": "^0.1.86",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
     "ai": "^6.0.116",
+    "highlight.js": "^11.12.0",
     "marked": "^17.0.6",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
     "solid-js": "^1.9.11",
     "web-tree-sitter": "0.25.10",
     "yaml": "^2.8.2",
