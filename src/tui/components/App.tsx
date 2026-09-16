@@ -854,6 +854,7 @@ export const App: Component<AppProps> = (props) => {
     return [
       { id: "pin" as const, label: session.pinned ? "Unpin session" : "Pin session" },
       { id: "rename" as const, label: "Rename session" },
+      { id: "copy-id" as const, label: "Copy session ID" },
     ].filter((action) => !query || action.label.toLowerCase().includes(query))
   }
 
@@ -885,6 +886,16 @@ export const App: Component<AppProps> = (props) => {
       closeSessionActions()
       setPaletteSessionAction("rename")
       setPaletteQuery(session.title ?? "")
+      return
+    }
+    if (action.id === "copy-id") {
+      closeSessionActions()
+      try {
+        await writeClipboard(session.id)
+        notifyInfo("Session actions", "Copied session ID to clipboard", 2000)
+      } catch (error) {
+        notifyWarn("Session actions", error instanceof Error ? error.message : String(error), 4000)
+      }
       return
     }
     try {

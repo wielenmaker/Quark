@@ -9,7 +9,7 @@ import { createCliRenderer, RGBA } from "@opentui/core"
 import { App, type CommandResult } from "./components/App"
 import { bootstrap } from "../bootstrap"
 import { prompt, cancel, isActive, resolveModel, runSeededSession } from "../session/prompt"
-import { createSession, listProjectSessions, getSession, setSessionTitle, setSessionPinned } from "../session/session"
+import { createSession, listProjectSessions, getSession, setSessionTitle, setSessionPinned, type Session } from "../session/session"
 import { loadMessages, toModelMessages } from "../session/message"
 import { buildSystem } from "../session/system"
 import { buildModelPickerOptions } from "./model-picker"
@@ -24,6 +24,7 @@ import { loadConfig, parseModelSpec, resetConfigCache, configPath } from "../con
 import { resolveProfile, readPromptFile, listProfiles, resetProfileCache } from "../profile/profile"
 import { detectFromConfigOrOS } from "./terminal-bg"
 import { createGhosttyTitleController, isGhostty } from "./ghostty-title"
+import { reportActiveSession } from "./session-handoff"
 import { applyTheme, setTerminalBg, lightTheme, darkTheme } from "./theme"
 import { writeClipboard } from "./clipboard"
 import { buildEditorArgv, resolveEditor, type FileTarget } from "./editor"
@@ -41,6 +42,7 @@ import { firstRunAuthMessage, formatAuthStatuses } from "./auth-status"
 import { listWorktrees, filterToProjectWorktrees, getBranchFromPath, getWorktreeBranch, resolveWorktree, createWorktree } from "../worktree/worktree"
 import * as path from "path"
 import * as fs from "fs"
+import { startLiveSessionServer } from "../session/live"
 
 // ---------------------------------------------------------------------------
 // Parse CLI args
@@ -89,19 +91,51 @@ await bootstrap({ profileTools: profile.tools, boundSkills: profile.skills })
 const sessionArg = parseArg("--session")
 let currentSession: { id: string } | null = null
 let initialMessages: ReturnType<typeof dbToTuiMessages> = []
+
+/**
+ * The single owner of "which session is active".
+ *
+ * Every transition — resume, lazy creation, branch, `/new`, worktree switch —
+ * goes through here, so `currentSession`, `QUARK_SESSION_ID` (inherited by
+ * subagents) and the supervisor handoff file can never drift apart.
+ */
+function setActiveSession(id: string | null): void {
+  currentSession = id ? { id } : null
+  if (id) {
+    process.env.QUARK_SESSION_ID = id
+  } else {
+    delete process.env.QUARK_SESSION_ID
+  }
+  reportActiveSession(id)
+}
+
 if (sessionArg) {
-  const session = getSession(sessionArg)
-  currentSession = { id: session.id }
-  process.env.QUARK_SESSION_ID = session.id
-  const { messages, parts } = loadMessages(session.id)
-  initialMessages = dbToTuiMessages(messages, parts)
+  // An id that no longer exists must not kill the TUI at startup: `--session`
+  // also arrives from an orchestrator that persisted the id earlier, and the
+  // session directory can be gone by the time we resume.
+  let session: Session | null = null
+  try {
+    session = getSession(sessionArg)
+  } catch {
+    setImmediate(() =>
+      notifyInfo("Session", `Session ${sessionArg} no longer exists — starting a new one`, 6000),
+    )
+  }
+
+  if (session) {
+    setActiveSession(session.id)
+    const { messages, parts } = loadMessages(session.id)
+    initialMessages = dbToTuiMessages(messages, parts)
+    startLiveSessionServer(session.id)
+  }
 }
 
 // Listen for lazy session creation from prompt()
 bus.on("session-created", ({ sessionId }) => {
-  currentSession = { id: sessionId }
-  process.env.QUARK_SESSION_ID = sessionId
+  setActiveSession(sessionId)
+  startLiveSessionServer(sessionId)
 })
+bus.on("assistant-message-start", ({ sessionId }) => startLiveSessionServer(sessionId))
 
 // Discover skills and determine model name at startup
 const skills = discoverSkills()
@@ -147,8 +181,7 @@ async function switchToWorktree(id: string): Promise<{ success: boolean; error?:
   }
 
   // Reset session state
-  currentSession = null
-  delete process.env.QUARK_SESSION_ID
+  setActiveSession(null)
 
   // Reset caches
   resetConfigCache()
@@ -232,8 +265,7 @@ function handleThinkingEffortChange(thinkingEffort: string) {
 }
 
 function activateBranch(branch: BranchResult, goal: string, label: string, retainTranscript = false): void {
-  currentSession = { id: branch.sessionId }
-  process.env.QUARK_SESSION_ID = branch.sessionId
+  setActiveSession(branch.sessionId)
   const child = loadMessages(branch.sessionId)
   const tuiMessages = dbToTuiMessages(child.messages, child.parts)
   const visibleMessages = branch.promptMessageId
@@ -267,8 +299,7 @@ function runBranchGoal(branch: BranchResult, goal: string): void {
     agent: activeAgent,
     catalog: catalogModels.catalog,
   }).then(({ sessionId }) => {
-    currentSession = { id: sessionId }
-    process.env.QUARK_SESSION_ID = sessionId
+    setActiveSession(sessionId)
   }).catch((err) => {
     bus.emit("error", { sessionId: branch.sessionId, error: err })
   })
@@ -321,15 +352,14 @@ async function handleCommand(command: string, args: string, sessionId: string | 
   // /new and /clear work even without an active session
   if (command === "new") {
     const newSession = createSession()
-    currentSession = { id: newSession.id }
-    process.env.QUARK_SESSION_ID = newSession.id
+    setActiveSession(newSession.id)
     bus.emit("session-reset", { sessionId: newSession.id })
     notifyInfo("Session", `New session started`, 2000)
     return { handled: true }
   }
 
   if (command === "clear") {
-    currentSession = null
+    setActiveSession(null)
     bus.emit("session-reset", { sessionId: null })
     return { handled: true }
   }
@@ -506,8 +536,7 @@ async function handleCommand(command: string, args: string, sessionId: string | 
       }
     }
 
-    currentSession = match
-    process.env.QUARK_SESSION_ID = match.id
+    setActiveSession(match.id)
     const { messages, parts } = loadMessages(match.id)
     const tuiMessages = dbToTuiMessages(messages, parts)
     // Prefer real API token count from DB; fall back to chars/4 heuristic

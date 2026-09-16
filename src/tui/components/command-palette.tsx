@@ -41,7 +41,7 @@ export interface ConnectPaletteView {
 
 export interface SessionActionMenu {
   query: string
-  actions: { id: "pin" | "rename"; label: string }[]
+  actions: { id: "pin" | "rename" | "copy-id"; label: string }[]
   selectedIndex: number
   onInput: () => void
   onRef?: (ref: TextareaRenderable) => void
