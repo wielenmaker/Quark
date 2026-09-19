@@ -29,7 +29,7 @@ export function scrollTopForSelection(
   // so their items are offset by 1. Other pickers (files/commands)
   // have no title.
   const titleOffset =
-    mode.type === "profiles" || mode.type === "tools"
+    mode.type === "agents" || mode.type === "tools"
       ? 1
       : 0
   const scrollIndex = selectedIndex + titleOffset

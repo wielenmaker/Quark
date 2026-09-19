@@ -6,7 +6,7 @@
 import { createStore, produce, type SetStoreFunction } from "solid-js/store"
 import type { MessageRow, PartRow, TextPartData, ToolPartData, ImagePartData, ReasoningPartData } from "@quark/runner/session/message"
 import { normalizeLegacyToolStatus, LEGACY_INTERRUPTED_ERROR } from "@quark/runner/shared/conversation-view"
-import { resolveProfile } from "../profile/profile"
+import { resolveAgent } from "../agent/agent"
 import type { CatalogModel } from "@quark/runner/provider/catalog-snapshot"
 import { thinkingCapabilityFromCatalog } from "@quark/runner/provider/catalog-runtime"
 import type { SubagentErrorKind } from "@quark/runner/subagent/protocol"
@@ -186,12 +186,12 @@ function parseSubAgentCommand(cmd: string): { profile: string; prompt?: string }
 // Resolve the model name and token limit for a sub-agent profile so the
 // card can show them immediately, before the first step-finish arrives.
 function resolveSubAgentModelMeta(
-  profileId: string,
+  agentId: string,
   getCatalogModel?: (spec: string) => CatalogModel | null,
 ): { modelName: string; tokenLimit: number } {
   try {
-    const profile = resolveProfile(profileId)
-    const model = profile.model
+    const agent = resolveAgent(agentId)
+    const model = agent.model
     const catalogModel = model ? getCatalogModel?.(model) : null
     const limit = catalogModel?.limit
     return { modelName: model ?? "unknown", tokenLimit: limit?.context ?? limit?.input ?? 0 }

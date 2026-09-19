@@ -65,20 +65,20 @@ describe("scrollTopForSelection", () => {
   })
 
   test("choice pickers account for the title row at index 0", () => {
-    const profilesMode = { type: "profiles" as const, items: [], selectedIndex: 0 }
+    const agentsMode = { type: "agents" as const, items: [], selectedIndex: 0 }
     // selectedIndex 0 → scrollIndex 1 (after title) → ideal -1, clamp to 0
-    expect(scrollTopForSelection(profilesMode, 0, 20, 5)).toBe(0)
+    expect(scrollTopForSelection(agentsMode, 0, 20, 5)).toBe(0)
     // selectedIndex 2 → scrollIndex 3 → ideal 1
-    expect(scrollTopForSelection(profilesMode, 2, 20, 5)).toBe(1)
+    expect(scrollTopForSelection(agentsMode, 2, 20, 5)).toBe(1)
     // selectedIndex 19 → scrollIndex 20 → ideal 18, clamp to 15
-    expect(scrollTopForSelection(profilesMode, 19, 20, 5)).toBe(15)
+    expect(scrollTopForSelection(agentsMode, 19, 20, 5)).toBe(15)
   })
 
   test("profile pickers scroll once selection moves below the visible rows", () => {
-    const profilesMode = { type: "profiles" as const, items: [], selectedIndex: 0 }
-    // Five visible rows include the title and four profiles. Moving to the
-    // fifth profile advances the window so its selected row remains visible.
-    expect(scrollTopForSelection(profilesMode, 4, 10, 5)).toBe(3)
+    const agentsMode = { type: "agents" as const, items: [], selectedIndex: 0 }
+    // Five visible rows include the title and four agents. Moving to the
+    // fifth agent advances the window so its selected row remains visible.
+    expect(scrollTopForSelection(agentsMode, 4, 10, 5)).toBe(3)
   })
 })
 

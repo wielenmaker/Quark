@@ -1,4 +1,4 @@
-// App-side filesystem loaders — plugin scanning and profile-tool loading.
+// App-side filesystem loaders — plugin scanning and agent-tool loading.
 //
 // QUARK_CONFIG_DIR pins discovery to a temp dir, so nothing touches the real
 // ~/.config/quark. Temp dirs live under the repo so dynamically imported tool
@@ -13,7 +13,7 @@ import {
   createPluginContext,
   getPluginsDir,
 } from "../../packages/quark/src/plugin-loader"
-import { loadProfileTools, getToolsDir } from "../../packages/quark/src/tool-loader"
+import { loadTools, getToolsDir } from "../../packages/quark/src/tool-loader"
 import { clear as clearTools, list as listTools } from "../../packages/runner/src/tool/registry"
 import { clearHooks, globalHooks } from "../../packages/runner/src/plugin/registry"
 
@@ -99,9 +99,9 @@ describe("plugin loader", () => {
   })
 })
 
-describe("profile tool loader", () => {
+describe("agent tool loader", () => {
   test("built-in ids are skipped without touching disk", async () => {
-    const result = await loadProfileTools(["read", "look", "skill"])
+    const result = await loadTools(["read", "look", "skill"])
     expect(result).toEqual({ loaded: [], missing: [], errors: [], defs: [] })
   })
 
@@ -116,7 +116,7 @@ describe("profile tool loader", () => {
       }
     `)
 
-    const { defs, loaded, errors } = await loadProfileTools(["echo"], { register: false })
+    const { defs, loaded, errors } = await loadTools(["echo"], { register: false })
     expect(errors).toEqual([])
     expect(loaded).toEqual(["echo"])
     expect(defs.map((d) => d.id)).toEqual(["echo"])
@@ -135,12 +135,12 @@ describe("profile tool loader", () => {
       }
     `)
 
-    await loadProfileTools(["echo"])
+    await loadTools(["echo"])
     expect(listTools().map((t) => t.id)).toEqual(["echo"])
   })
 
   test("missing tool file is reported as missing", async () => {
-    const result = await loadProfileTools(["ghost"], { register: false })
+    const result = await loadTools(["ghost"], { register: false })
     expect(result.missing).toEqual(["ghost"])
     expect(result.errors).toEqual([])
   })
@@ -156,7 +156,7 @@ describe("profile tool loader", () => {
       }
     `)
 
-    const result = await loadProfileTools(["echo"], { register: false })
+    const result = await loadTools(["echo"], { register: false })
     expect(result.loaded).toEqual([])
     expect(result.defs).toEqual([])
     expect(result.errors[0]!.error).toContain("does not match filename")

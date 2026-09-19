@@ -1,9 +1,9 @@
-// Tool loader — load profile-declared tools from <config>/tools/
+// Tool loader — load agent-declared tools from <config>/tools/
 //
 // App-side filesystem adapter: discovery/import lives here, while the ToolDef
 // contract and registry live in `@quark/runner` (tool/tool, tool/registry).
 //
-// Tools are loaded by ID from the profile's tools[] array.
+// Tools are loaded by ID from an agent's tools[] array.
 // Each tool lives at <config>/tools/{id}.ts
 // Notifications surface any load failures.
 
@@ -36,7 +36,7 @@ export interface LoadResult {
 }
 
 /**
- * Load tools declared in a profile's tools[] array.
+ * Load tools declared in an agent's tools[] array.
  * Each tool is loaded from <config>/tools/{id}.ts
  * Built-in tools (read, look, skill) are skipped.
  *
@@ -44,7 +44,7 @@ export interface LoadResult {
  *   {@link LoadResult.defs} without registering them globally. Used by the
  *   portable AgentDefinition path.
  */
-export async function loadProfileTools(
+export async function loadTools(
   toolIds: string[],
   opts: { register?: boolean } = {},
 ): Promise<LoadResult> {

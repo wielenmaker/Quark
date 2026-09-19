@@ -18,7 +18,8 @@ export const commands: SlashCommand[] = [
   { id: "sessions", description: "List or switch sessions", usage: "[session-id]" },
 
   { id: "model", description: "Switch model", usage: "<model-name>" },
-  { id: "profile", description: "Switch profile", usage: "<profile-name>" },
+  { id: "agent", description: "Switch agent", usage: "<agent-name>" },
+  { id: "profile", description: "Alias for /agent", usage: "<agent-name>" },
   { id: "skills", description: "Add a skill" },
   { id: "settings", description: "Open config in editor (applies on close)" },
   { id: "reload-config", description: "Reload config without restarting" },

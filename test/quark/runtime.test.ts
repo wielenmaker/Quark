@@ -48,7 +48,7 @@ beforeAll(() => {
 
   // max_steps: 1 keeps the config-adaptation test to a single model call.
   writeFileSync(join(configDir, "config.yaml"), [
-    "version: 2",
+    "version: 3",
     "models:",
     `  small: ${MODEL}`,
     "max_steps: 1",

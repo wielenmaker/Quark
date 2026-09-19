@@ -85,8 +85,8 @@ interface AppProps {
   }[]
   getModels?: () => { id: string; name: string; detail?: string }[]
   getCurrentModel?: () => string
-  getProfiles?: () => { id: string; name: string }[]
-  getCurrentProfile?: () => string
+  getAgents?: () => { id: string; name: string }[]
+  getCurrentAgent?: () => string
   getPaletteEntries?: () => PaletteEntry[] | Promise<PaletteEntry[]>
   initialSessionId?: string
   initialMessages?: TuiMessage[]
@@ -757,7 +757,7 @@ export const App: Component<AppProps> = (props) => {
     const s = slash()
 
     // Choice pickers: filter the list by what the user types
-    if (s.mode === "profiles" && s.active) {
+    if (s.mode === "agents" && s.active) {
       const options = getChoiceOptions(s.mode)
       if (!options) return
       const query = newValue
@@ -944,9 +944,9 @@ export const App: Component<AppProps> = (props) => {
     return true
   }
 
-  const getChoiceOptions = (_mode: ChoicePickerMode) => props.getProfiles?.()
+  const getChoiceOptions = (_mode: ChoicePickerMode) => props.getAgents?.()
 
-  const getCurrentChoice = (_mode: ChoicePickerMode) => props.getCurrentProfile?.() ?? ""
+  const getCurrentChoice = (_mode: ChoicePickerMode) => props.getCurrentAgent?.() ?? ""
 
   const openChoicePicker = (mode: ChoicePickerMode): boolean => {
     const options = getChoiceOptions(mode)
@@ -1058,12 +1058,12 @@ export const App: Component<AppProps> = (props) => {
 
       if (isTab || isReturn) {
         // --- Choice picker mode ---
-        if (s.mode === "profiles") {
+        if (s.mode === "agents") {
           const selected = s.pickerItems[s.selectedIndex]
           if (selected) {
             setSlash(SLASH_INACTIVE)
             setInputText("")
-            props.onCommand?.("profile", selected.id, state.store.sessionId)
+            props.onCommand?.("agent", selected.id, state.store.sessionId)
           }
           return true
         }
@@ -1072,7 +1072,7 @@ export const App: Component<AppProps> = (props) => {
         if (s.items.length > 0) {
           const selected = s.items[s.selectedIndex]
           if (selected) {
-            // /model and /profile → transition to picker (Tab or Enter)
+            // /model and /agent → transition to picker (Tab or Enter)
             const pickerMode = pickerModeForCommand(selected.id)
             if (pickerMode && (isReturn || isTab) && openChoicePicker(pickerMode)) {
               return true
@@ -1300,7 +1300,7 @@ export const App: Component<AppProps> = (props) => {
   const autocompleteMode = (): AutocompleteMode | null => {
     const s = slash()
     if (s.active) {
-      if (s.mode === "profiles") {
+      if (s.mode === "agents") {
         return { type: s.mode, items: s.pickerItems, selectedIndex: s.selectedIndex }
       }
       return { type: "commands", items: s.items, selectedIndex: s.selectedIndex, query: s.query }

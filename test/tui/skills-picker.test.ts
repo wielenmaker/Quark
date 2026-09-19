@@ -11,7 +11,7 @@ import { discoverSkills, clearCache, type Skill, type SkillDefinition } from "..
 import { buildSystem } from "../../packages/runner/src/session/system"
 import { buildSkillTool } from "../../packages/runner/src/tool/skill"
 import { defineAgent, type AgentDefinition } from "../../packages/runner/src/agent"
-import { materializeAgent } from "../../packages/quark/src/agent-compat"
+import { materializeAgent } from "../../packages/quark/src/agent/agent"
 import { buildPickerItems, type PickerOption } from "../../packages/quark/src/tui/picker-items"
 
 // ---------------------------------------------------------------------------
@@ -383,53 +383,53 @@ describe("skills picker edge cases", () => {
 // 8. Profile switch resets skills
 // ===========================================================================
 
-describe("profile switch resets skills", () => {
+describe("agent switch resets skills", () => {
   // Hermetic skill resolution: never touch the developer's skill directories.
   const resolveSkills = (names: string[]): SkillDefinition[] =>
     names.map((name) => skillDef(name, `${name} description`))
 
-  test("materializeAgent creates agent with profile's declared skills only", async () => {
-    const profile = {
+  test("materializeAgent creates agent with the manifest's declared skills only", async () => {
+    const def = {
       id: "custom",
       name: "Custom",
-      promptFile: "",
+      instructions: "You are custom.",
       tools: ["read"],
       skills: ["declared-skill"],
     }
 
-    const agent = await materializeAgent(profile, "You are custom.", { resolveSkills })
+    const agent = await materializeAgent(def, { resolveSkills })
     expect(agent.skills?.map((s) => s.name)).toEqual(["declared-skill"])
     // Skills added via /skills during a previous session would NOT be in the new agent
   })
 
-  test("new agent from profile does not carry over temporary skills", async () => {
-    // Simulate: profile A's base skills are ['alpha']
+  test("new agent does not carry over temporary skills", async () => {
+    // Simulate: agent A's base skills are ['alpha']
     // User adds 'beta' via /skills → agent.skills gains 'beta'
-    // Then switches to profile B → new materializeAgent → only profile B's skills
+    // Then switches to agent B → new materializeAgent → only agent B's skills
 
-    const profileA = {
-      id: "profile-a",
-      name: "Profile A",
-      promptFile: "",
+    const agentDefA = {
+      id: "agent-a",
+      name: "Agent A",
+      instructions: "prompt",
       tools: ["read"],
       skills: ["alpha"],
     }
 
-    const profileB = {
-      id: "profile-b",
-      name: "Profile B",
-      promptFile: "",
+    const agentDefB = {
+      id: "agent-b",
+      name: "Agent B",
+      instructions: "prompt",
       tools: ["read"],
       skills: ["gamma"],
     }
 
-    // Simulate adding beta to profile A's agent
-    const agentA = await materializeAgent(profileA, "prompt", { resolveSkills })
+    // Simulate adding beta to agent A's agent
+    const agentA = await materializeAgent(agentDefA, { resolveSkills })
     agentA.skills = [...(agentA.skills ?? []), skillDef("beta", "beta description")]
     expect(agentA.skills.map((s) => s.name)).toEqual(["alpha", "beta"])
 
-    // Switch to profile B — creates a fresh agent
-    const agentB = await materializeAgent(profileB, "prompt", { resolveSkills })
+    // Switch to agent B — creates a fresh agent
+    const agentB = await materializeAgent(agentDefB, { resolveSkills })
     expect(agentB.skills?.map((s) => s.name)).toEqual(["gamma"])
     // 'beta' from the temporary addition is gone
   })

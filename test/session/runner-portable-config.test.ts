@@ -1,6 +1,6 @@
 // Portable AgentDefinition runs must not consult implicit Quark config.
 //
-// QUARK_CONFIG_DIR points at a poisoned config whose `version: 1` makes
+// QUARK_CONFIG_DIR points at a poisoned config whose legacy `version: 1` makes
 // loadConfig() throw. Any reintroduced config.yaml read on the portable path
 // turns these runs into an observable failure.
 
@@ -26,7 +26,7 @@ const originalConfigDir = process.env.QUARK_CONFIG_DIR
 
 beforeAll(() => {
   configDir = mkdtempSync(join(tmpdir(), "quark-poison-config-"))
-  // Version 1 always fails parseConfigV2, so reading this file cannot be silent.
+  // Version 1 always fails parseConfigV3, so reading this file cannot be silent.
   writeFileSync(join(configDir, "config.yaml"), [
     "version: 1",
     "models:",

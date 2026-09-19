@@ -1,50 +1,37 @@
-// Tests for issue #166 — invalid thinking config should produce a clean
+// Tests for issue #166 — invalid agent thinking config should produce a clean
 // startup error instead of an unhandled exception.
 //
-// These tests spawn the CLI binary as a subprocess with a temp project
-// directory that contains an invalid .quark/config.yaml and verify:
+// These tests spawn the CLI binary with a temp QUARK_CONFIG_DIR containing the
+// agent manifests and verify:
 //   1. stderr contains a clear error message (not a stack trace)
 //   2. Exit code is non-zero (1)
 //   3. The agent does NOT proceed to generate output
-//
-// These are TDD failing tests — they will FAIL until the production fix
-// is applied to wrap resolveProfile() in proper error handling.
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs"
 import { resolve, join } from "node:path"
 import { tmpdir } from "node:os"
 
-// ---------------------------------------------------------------------------
-// Project root for spawning CLI
-// ---------------------------------------------------------------------------
 const PROJECT_ROOT = resolve(import.meta.dir, "../..")
 
-// ---------------------------------------------------------------------------
-// Temp project directory for isolated .quark/config.yaml
-// ---------------------------------------------------------------------------
-let tempProjectDir: string
+let configDir: string
 
 beforeAll(() => {
-  tempProjectDir = mkdtempSync(join(tmpdir(), "quark-issue-166-"))
+  configDir = mkdtempSync(join(tmpdir(), "quark-issue-166-"))
 })
 
 afterAll(() => {
-  rmSync(tempProjectDir, { recursive: true, force: true })
+  rmSync(configDir, { recursive: true, force: true })
 })
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Write a .quark/config.yaml inside the temp project dir. */
-function writeProjectConfig(yaml: string) {
-  const quarkDir = join(tempProjectDir, ".quark")
-  mkdirSync(quarkDir, { recursive: true })
-  writeFileSync(join(quarkDir, "config.yaml"), yaml, "utf-8")
+/** Write `agents/<id>/agent.yaml` under the temp config dir. */
+function writeAgent(id: string, yaml: string) {
+  const dir = join(configDir, "agents", id)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, "agent.yaml"), yaml, "utf-8")
 }
 
-/** Spawn the CLI entry point with given args, cwd = temp project dir. */
+/** Spawn the CLI entry point with given args, isolated config dir. */
 function runCli(args: string[]) {
   return Bun.spawnSync({
     cmd: [
@@ -54,31 +41,22 @@ function runCli(args: string[]) {
       join(PROJECT_ROOT, "packages", "quark", "src", "cli.ts"),
       ...args,
     ],
-    cwd: tempProjectDir,
+    cwd: PROJECT_ROOT,
     stdout: "pipe",
     stderr: "pipe",
     env: {
       ...process.env,
-      // Prevent QUARK_DEBUG noise
+      QUARK_CONFIG_DIR: configDir,
       QUARK_DEBUG: "",
     },
   })
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("CLI with invalid thinking config (issue #166)", () => {
-  test("reports exact-catalog validation when profile has unsupported thinking effort", () => {
-    writeProjectConfig(`
-profiles:
-  finder:
-    model: opencode/deepseek-v4-flash
-    thinking_effort: xhigh
-`)
+  test("reports exact-catalog validation when an agent has an unsupported thinking effort", () => {
+    writeAgent("finder", "model: opencode/deepseek-v4-flash\nthinking_effort: xhigh\n")
 
-    const result = runCli(["--profile", "finder", "--message", "hello"])
+    const result = runCli(["--agent", "finder", "--message", "hello"])
 
     const stderr = result.stderr.toString()
 
@@ -86,15 +64,10 @@ profiles:
     expect(stderr).toContain("not present in the exact catalog")
   })
 
-  test("reports exact-catalog validation when profile model does not support thinking", () => {
-    writeProjectConfig(`
-profiles:
-  bad:
-    model: copilot/gpt-4o
-    thinking_effort: high
-`)
+  test("reports exact-catalog validation when an agent model does not support thinking", () => {
+    writeAgent("bad", "model: copilot/gpt-4o\nthinking_effort: high\n")
 
-    const result = runCli(["--profile", "bad", "--message", "hello"])
+    const result = runCli(["--agent", "bad", "--message", "hello"])
 
     const stderr = result.stderr.toString()
 
@@ -104,14 +77,9 @@ profiles:
 
   test("valid thinking config does NOT cause a spurious error", () => {
     // deepseek-v4-pro supports: none, high, max
-    writeProjectConfig(`
-profiles:
-  finder:
-    model: opencode/deepseek-v4-pro
-    thinking_effort: high
-`)
+    writeAgent("finder-pro", "model: opencode/deepseek-v4-pro\nthinking_effort: high\n")
 
-    const result = runCli(["--profile", "finder", "--message", "hello"])
+    const result = runCli(["--agent", "finder-pro", "--message", "hello"])
 
     const stderr = result.stderr.toString()
 
@@ -122,19 +90,12 @@ profiles:
     expect(stderr).not.toContain("at profile validation")
   })
 
-  test("does not eagerly validate inactive profile thinking", () => {
-    writeProjectConfig(`
-profiles:
-  badprofile:
-    model: opencode/deepseek-v4-flash
-    thinking_effort: xhigh
-`)
+  test("--profile still resolves the agent as a compatibility alias", () => {
+    writeAgent("finder-alias", "model: opencode/deepseek-v4-flash\nthinking_effort: xhigh\n")
 
-    const result = runCli(["--profile", "coder", "--message", "hello"])
-
-    const stderr = result.stderr.toString()
+    const result = runCli(["--profile", "finder-alias", "--message", "hello"])
 
     expect(result.exitCode).not.toBe(0)
-    expect(stderr).toContain("not present in the exact catalog")
+    expect(result.stderr.toString()).toContain("not present in the exact catalog")
   })
 })

@@ -1,6 +1,5 @@
-import { materializeAgent } from "../packages/quark/src/agent-compat"
+import { materializeAgent, resolveAgent, listAgents, type AgentDef } from "../packages/quark/src/agent/agent"
 import { loadConfig, parseModelSpec, resetConfigCache } from "../packages/quark/src/config/config"
-import { resolveProfile, readPromptFile, listProfiles, resetProfileCache, type ProfileDef } from "../packages/quark/src/profile/profile"
 import { loadAmbientInstructions } from "../packages/quark/src/ambient"
 import { loadPlugins } from "../packages/quark/src/plugin-loader"
 import { ensureStorageRoot } from "../packages/runner/src/storage/session-jsonl"
@@ -89,29 +88,29 @@ function sessionData(sessionId: string) {
 
 export class WebBackend {
   private agent: AgentDefinition
-  private profile: ProfileDef
+  private agentDef: AgentDef
   private modelOverride: string | null = null
   private thinkingOverride: string | null = null
   private pendingSkillContext: string[] = []
   private activatedSkills = new Set<string>()
 
   private constructor(
-    profile: ProfileDef,
+    agentDef: AgentDef,
     agent: AgentDefinition,
     private readonly catalog: CatalogModelRuntime,
   ) {
-    this.profile = profile
+    this.agentDef = agentDef
     this.agent = agent
   }
 
   static async create(): Promise<WebBackend> {
-    const profile = resolveProfile()
-    const agent = await materializeAgent(profile, readPromptFile(profile).content)
+    const agentDef = resolveAgent()
+    const agent = await materializeAgent(agentDef)
     ensureStorageRoot()
     await loadPlugins()
     const catalog = await CatalogModelRuntime.create()
     void catalog.refresh()
-    return new WebBackend(profile, agent, catalog)
+    return new WebBackend(agentDef, agent, catalog)
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -200,8 +199,8 @@ export class WebBackend {
   private async control(request: Request, pathname: string): Promise<Response | null> {
     if (pathname === "/api/catalog" && request.method === "GET") {
       return json({
-        profiles: listProfiles(),
-        profile: this.profile.id,
+        profiles: listAgents(),
+        profile: this.agentDef.id,
         skills: discoverSkills().map((skill) => skill.name),
         activeSkills: this.activeSkills(),
       })
@@ -244,17 +243,17 @@ export class WebBackend {
     }
 
     if (pathname === "/api/profiles" && request.method === "GET") {
-      return json({ profiles: listProfiles(), active: this.profile.id })
+      return json({ profiles: listAgents(), active: this.agentDef.id })
     }
 
     if (pathname === "/api/profile" && request.method === "POST") {
       const body = await request.json() as { name?: string }
       const name = body.name?.trim()
       if (!name) return json({ error: "A profile name is required" }, 400)
-      if (!listProfiles().includes(name)) {
-        return json({ error: `Profile "${name}" not found. Available: ${listProfiles().join(", ")}` }, 404)
+      if (!listAgents().includes(name)) {
+        return json({ error: `Profile "${name}" not found. Available: ${listAgents().join(", ")}` }, 404)
       }
-      await this.switchProfile(name)
+      await this.switchAgent(name)
       return json({ status: this.status() })
     }
 
@@ -266,7 +265,7 @@ export class WebBackend {
       const body = await request.json() as { name?: string }
       const name = body.name?.trim()
       if (!name) return json({ error: "A skill name is required" }, 400)
-      if (this.profile.skills.includes(name) || this.activatedSkills.has(name)) {
+      if (this.agentDef.skills.includes(name) || this.activatedSkills.has(name)) {
         return json({
           activated: false,
           reason: `Skill "${name}" is already available`,
@@ -284,8 +283,7 @@ export class WebBackend {
 
     if (pathname === "/api/reload-config" && request.method === "POST") {
       resetConfigCache()
-      resetProfileCache()
-      await this.applyProfile(this.profile.id)
+      await this.applyAgent(this.agentDef.id)
       this.catalog.reloadProviders()
       void this.catalog.refresh()
       this.thinkingOverride = null
@@ -297,7 +295,7 @@ export class WebBackend {
 
   /** Skills available to the next turn: profile-bound skills plus ones added this session. */
   private activeSkills(): string[] {
-    return [...new Set([...this.profile.skills, ...this.activatedSkills])]
+    return [...new Set([...this.agentDef.skills, ...this.activatedSkills])]
   }
 
   private modelName(): string {
@@ -338,23 +336,21 @@ export class WebBackend {
       tokenLimit: model?.limit.context ?? model?.limit.input ?? 0,
       cwd: process.cwd(),
       branch: getBranchFromPath(process.cwd()),
-      profile: this.profile.id,
+      profile: this.agentDef.id,
     }
   }
 
-  /** Rebuilds the agent from a profile and reloads its tools and skills. */
-  private async applyProfile(profileId: string): Promise<void> {
-    resetProfileCache()
+  /** Rebuilds the agent from a manifest and reloads its tools and skills. */
+  private async applyAgent(agentId: string): Promise<void> {
     clearSkillCache()
-    const profile = resolveProfile(profileId)
-    this.profile = profile
-    this.agent = await materializeAgent(profile, readPromptFile(profile).content)
+    this.agentDef = resolveAgent(agentId)
+    this.agent = await materializeAgent(this.agentDef)
     this.pendingSkillContext = []
     this.activatedSkills.clear()
   }
 
-  private async switchProfile(name: string): Promise<void> {
-    await this.applyProfile(name)
+  private async switchAgent(name: string): Promise<void> {
+    await this.applyAgent(name)
     this.modelOverride = null
     this.thinkingOverride = null
   }
@@ -365,7 +361,7 @@ export class WebBackend {
       ? createSteerBranch({
           sessionId,
           prompt: goal || undefined,
-          profile: this.profile.id,
+          profile: this.agentDef.id,
           messages,
           parts,
         })
@@ -374,7 +370,7 @@ export class WebBackend {
           messages,
           parts,
           model: await resolveModel(loadConfig().models.small, "small", { catalog: this.catalog.catalog }),
-          profile: this.profile.id,
+          profile: this.agentDef.id,
           prompt: goal || undefined,
         })
 

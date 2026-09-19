@@ -1,6 +1,6 @@
 // CLI interactive launch — flags must reach the TUI, never be silently dropped.
 //
-// `quark --profile X` (no message) spawns the TUI with `bun`. We put a fake
+// `quark --agent X` (no message) spawns the TUI with `bun`. We put a fake
 // `bun` first on PATH that prints its argv, so the test observes exactly what
 // the CLI forwards without launching a real terminal UI.
 
@@ -48,15 +48,15 @@ function runCli(args: string[]) {
 }
 
 describe("CLI interactive launch forwards flags to the TUI", () => {
-  test("--profile, --model, and --session are passed through", () => {
+  test("--agent, --model, and --session are passed through", () => {
     const result = runCli([
-      "--profile", "researcher",
+      "--agent", "researcher",
       "--model", "ollama/test-model",
       "--session", "abc",
     ])
 
     const forwarded = result.stdout.toString().split("\n")
-    expect(forwarded).toContain("--profile")
+    expect(forwarded).toContain("--agent")
     expect(forwarded).toContain("researcher")
     expect(forwarded).toContain("--model")
     expect(forwarded).toContain("ollama/test-model")
@@ -64,11 +64,20 @@ describe("CLI interactive launch forwards flags to the TUI", () => {
     expect(forwarded).toContain("abc")
   })
 
+  test("--profile remains a compatibility alias for --agent", () => {
+    const result = runCli(["--profile", "researcher"])
+
+    const forwarded = result.stdout.toString().split("\n")
+    expect(forwarded).toContain("--agent")
+    expect(forwarded).toContain("researcher")
+    expect(forwarded).not.toContain("--profile")
+  })
+
   test("a bare interactive launch forwards none of the flags", () => {
     const result = runCli([])
 
     const forwarded = result.stdout.toString()
-    expect(forwarded).not.toContain("--profile")
+    expect(forwarded).not.toContain("--agent")
     expect(forwarded).not.toContain("--model")
     expect(forwarded).not.toContain("--session")
   })

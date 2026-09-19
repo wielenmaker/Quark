@@ -11,10 +11,11 @@ export interface PickerEntry {
   isCurrent?: boolean
 }
 
-export type ChoicePickerMode = "profiles"
+export type ChoicePickerMode = "agents"
 
 export function pickerModeForCommand(commandId: string): ChoicePickerMode | null {
-  if (commandId === "profile") return "profiles"
+  // `/profile` is a compatibility alias for `/agent`.
+  if (commandId === "agent" || commandId === "profile") return "agents"
   return null
 }
 

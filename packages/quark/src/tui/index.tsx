@@ -2,7 +2,8 @@
 // TUI entry point — renders the OpenTUI/SolidJS app and wires it to the backend
 //
 // Usage: bun src/tui/index.tsx
-// Usage: bun src/tui/index.tsx --profile researcher
+// Usage: bun src/tui/index.tsx --agent researcher
+// `--profile` is accepted as an alias for `--agent`.
 
 import { render } from "@opentui/solid"
 import { createCliRenderer, RGBA } from "@opentui/core"
@@ -19,11 +20,10 @@ import { compactBranch, createSteerBranch, type BranchResult } from "@quark/runn
 import { bus } from "@quark/runner/session/events"
 import type { AgentDefinition } from "@quark/runner/agent"
 import { discoverSkills, loadSkill } from "@quark/runner/skill/skill"
-import { materializeAgent } from "../agent-compat"
+import { materializeAgent, resolveAgent, listAgents, setAgentThinking } from "../agent/agent"
 import { createQuarkRuntime, type QuarkRuntime } from "../runtime"
 import { dbToTuiMessages } from "./state"
 import { loadConfig, parseModelSpec, resetConfigCache, configPath } from "../config/config"
-import { resolveProfile, readPromptFile, listProfiles, resetProfileCache } from "../profile/profile"
 import { detectFromConfigOrOS } from "./terminal-bg"
 import { createGhosttyTitleController, isGhostty } from "./ghostty-title"
 import { applyTheme, setTerminalBg, lightTheme, darkTheme } from "./theme"
@@ -32,7 +32,7 @@ import { buildEditorArgv, resolveEditor, type FileTarget } from "./editor"
 import { clearCache as clearSkillCache } from "@quark/runner/skill/skill"
 import { buildPaletteEntries } from "./palette-index"
 import { commands } from "./commands"
-import { dismiss, getActive, info as notifyInfo } from "@quark/runner/notification/notification"
+import { dismiss, getActive, info as notifyInfo, warn as notifyWarn } from "@quark/runner/notification/notification"
 import { undoLatest } from "@quark/runner/commands/undo"
 import { exportSessionToMarkdown } from "@quark/runner/commands/export"
 import { authStatus } from "@quark/runner/commands/auth"
@@ -59,26 +59,25 @@ const themeArg = parseArg("--theme")
 const modelArg = parseArg("--model")
 
 // ---------------------------------------------------------------------------
-// Parse --profile flag from CLI args
+// Parse --agent (alias: --profile) from CLI args
 // ---------------------------------------------------------------------------
-function parseProfileArg(): string | undefined {
-  return parseArg("--profile")
+function parseAgentArg(): string | undefined {
+  return parseArg("--agent") ?? parseArg("--profile")
 }
 
 // ---------------------------------------------------------------------------
-// Profile-aware agent setup
+// Agent setup
 // ---------------------------------------------------------------------------
-const profileArg = parseProfileArg()
-let profile
+const agentArg = parseAgentArg()
+let agentDef
 try {
-  profile = resolveProfile(profileArg)
+  agentDef = resolveAgent(agentArg)
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`Configuration error: ${message}`)
   process.exit(1)
 }
-const promptResult = readPromptFile(profile)
-let activeAgent: AgentDefinition = await materializeAgent(profile, promptResult.content)
+let activeAgent: AgentDefinition = await materializeAgent(agentDef)
 let pendingSkillContext: string[] = []
 const activatedSkillNames = new Set<string>()
 
@@ -156,15 +155,12 @@ async function switchToWorktree(id: string): Promise<{ success: boolean; error?:
 
   // Reset caches
   resetConfigCache()
-  resetProfileCache()
   clearSkillCache()
 
-  // Re-materialize the active profile for the new cwd, then rebind the runner.
+  // Re-materialize the active agent for the new cwd, then rebind the runner.
   // rebind reloads plugins and config for the new cwd, replacing the active
   // runner on the shared bus (no listeners leak).
-  const nextProfile = resolveProfile(activeAgent.id)
-  const nextPromptResult = readPromptFile(nextProfile)
-  activeAgent = await materializeAgent(nextProfile, nextPromptResult.content)
+  activeAgent = await materializeAgent(resolveAgent(activeAgent.id))
   pendingSkillContext = []
   activatedSkillNames.clear()
   await runtime.rebind(activeAgent)
@@ -232,6 +228,11 @@ function handleCancel(sessionId: string) {
 
 function handleThinkingEffortChange(thinkingEffort: string) {
   activeAgent = { ...activeAgent, thinkingEffort }
+  try {
+    setAgentThinking(activeAgent.id, { effort: thinkingEffort, mode: activeAgent.thinkingMode })
+  } catch (error) {
+    notifyWarn("Thinking configuration", error instanceof Error ? error.message : String(error), 5000)
+  }
   runtime.retarget(activeAgent)
 }
 
@@ -331,7 +332,7 @@ async function handleCommand(command: string, args: string, sessionId: string | 
     return { handled: true }
   }
 
-  // /model and /profile work even without an active session
+  // /model, /agent, and /profile work even without an active session
   if (command === "model") {
     if (!args) {
       bus.emit("error", { sessionId: sid ?? "unknown", error: new Error("Use /model to open the model picker") })
@@ -343,24 +344,25 @@ async function handleCommand(command: string, args: string, sessionId: string | 
     return { handled: true }
   }
 
-  if (command === "profile") {
+  // `/agent` is canonical; `/profile` is a compatibility alias.
+  if (command === "agent" || command === "profile") {
     if (!args) {
-      const available = listProfiles()
+      const available = listAgents()
       const current = activeAgent.id
       const lines = available.map((p) => {
         const marker = p === current ? " ← active" : ""
         return `${p}${marker}`
       })
-      notifyInfo("Profiles", lines.join("\n"), 6000)
+      notifyInfo("Agents", lines.join("\n"), 6000)
       return { handled: true }
     }
 
     const targetId = args.trim()
-    const available = listProfiles()
+    const available = listAgents()
     if (!available.includes(targetId)) {
       bus.emit("error", {
         sessionId: sid ?? "unknown",
-        error: new Error(`Profile "${targetId}" not found. Available: ${available.join(", ")}`),
+        error: new Error(`Agent "${targetId}" not found. Available: ${available.join(", ")}`),
       })
       return { handled: true }
     }
@@ -368,18 +370,16 @@ async function handleCommand(command: string, args: string, sessionId: string | 
     if (runtime.isBusy()) {
       bus.emit("error", {
         sessionId: sid ?? "unknown",
-        error: new Error("Cancel the running agent before switching profiles"),
+        error: new Error("Cancel the running agent before switching agents"),
       })
       return { handled: true }
     }
 
-    // Switch profile: resolve and re-materialize the portable agent definition.
+    // Switch agent: resolve and re-materialize the portable agent definition.
     // NOTE: We do NOT create a new session - messages are preserved
-    resetProfileCache()
     clearSkillCache()
-    const newProfile = resolveProfile(targetId)
-    const newPromptResult = readPromptFile(newProfile)
-    activeAgent = await materializeAgent(newProfile, newPromptResult.content)
+    const newAgentDef = resolveAgent(targetId)
+    activeAgent = await materializeAgent(newAgentDef)
     await runtime.rebind(activeAgent)
     pendingSkillContext = []
     activatedSkillNames.clear()
@@ -390,8 +390,8 @@ async function handleCommand(command: string, args: string, sessionId: string | 
       thinkingMode: activeAgent.thinkingMode,
     })
 
-    // Show toast notification for profile switch (no message in conversation)
-    notifyInfo("Profile", `Switched to: ${newProfile.name}`, 3000)
+    // Show toast notification for the agent switch (no message in conversation)
+    notifyInfo("Agent", `Switched to: ${newAgentDef.name}`, 3000)
 
     return { handled: true }
   }
@@ -670,10 +670,7 @@ function reloadConfig(): Promise<void> {
     if (n.title === "Thinking configuration") dismiss(n.id)
   }
   resetConfigCache()
-  resetProfileCache()
-  const reloadedProfile = resolveProfile(activeAgent.id)
-  const reloadedPrompt = readPromptFile(reloadedProfile)
-  return materializeAgent(reloadedProfile, reloadedPrompt.content).then(async (agent) => {
+  return materializeAgent(resolveAgent(activeAgent.id)).then(async (agent) => {
     activeAgent = agent
     await runtime.rebind(activeAgent)
     pendingSkillContext = []
@@ -764,11 +761,11 @@ function handleGetCurrentModel() {
   return modelOverride ?? activeAgent.model
 }
 
-function handleGetProfiles() {
-  return listProfiles().map((id) => ({ id, name: id }))
+function handleGetAgents() {
+  return listAgents().map((id) => ({ id, name: id }))
 }
 
-function handleGetCurrentProfile() {
+function handleGetCurrentAgent() {
   return activeAgent.id
 }
 
@@ -867,8 +864,8 @@ render(() => (
     getWorktrees={handleGetWorktrees}
     getModels={handleGetModels}
     getCurrentModel={handleGetCurrentModel}
-    getProfiles={handleGetProfiles}
-    getCurrentProfile={handleGetCurrentProfile}
+    getAgents={handleGetAgents}
+    getCurrentAgent={handleGetCurrentAgent}
     getPaletteEntries={handleGetPaletteEntries}
     getCatalogModel={(spec) => {
       const parsed = parseModelSpec(spec)

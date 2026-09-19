@@ -1,17 +1,18 @@
 // CLI entry point for Quark
 //
 // Usage:
-//   quark --profile coder --message "help me fix this bug"
-//   quark -p coder -m "help me fix this bug"
+//   quark --agent coder --message "help me fix this bug"
+//   quark -a coder -m "help me fix this bug"
 //   quark "quick message without flags"
 //   quark --model claude-sonnet-4.5 "one-off with a specific model"
+//
+// `--profile` / `-p` remain accepted as aliases for `--agent` / `-a`.
 
 import { parseArgs } from "util"
 import { prompt as legacyPrompt } from "@quark/runner/session/prompt"
-import { resolveProfile, readPromptFile, listProfiles } from "./profile/profile"
+import { resolveAgent, listAgents, materializeAgent } from "./agent/agent"
 import { ensureStorageRoot } from "@quark/runner/storage/session-jsonl"
 import { loadPlugins } from "./plugin-loader"
-import { materializeAgent } from "./agent-compat"
 import { bus, type TypedBus } from "@quark/runner/session/events"
 import { startEventWriter } from "@quark/runner/session/event-writer"
 import { setVerbose, debug } from "@quark/runner/debug"
@@ -38,18 +39,19 @@ Usage: quark [options] [message]
        quark auth <login|status|logout> [provider]
 
 Options:
-  -p, --profile <name>          Profile to use (default: from config)
+  -a, --agent <name>            Agent to use (default: config default_agent)
+  -p, --profile <name>          Alias for --agent
   -m, --message <text>          Message text (alternative to positional)
   -s, --session <id>            Resume an existing session
       --model <id>              Model to use for this run (e.g. copilot/claude-sonnet-4.5)
       --no-store                Run an ephemeral session — never written to disk
       --verbose                 Print every tool call + result to stderr.
                                 For engine internals use QUARK_DEBUG=* (see README).
-  -l, --list-profiles           List available profiles
+  -l, --list-agents             List available agents (alias: --list-profiles)
   -h, --help                    Show this help message
 
 Examples:
-  quark --profile coder --message "fix the bug in main.ts"
+  quark --agent coder --message "fix the bug in main.ts"
   quark -p coder "fix the bug in main.ts"
   quark "quick question"
   quark --model copilot/claude-sonnet-4.5 "use a specific model for this run"
@@ -58,13 +60,13 @@ Examples:
 }
 
 interface ParsedArgs {
-  profile?: string
+  agent?: string
   message?: string
   sessionId?: string
   model?: string
   noStore?: boolean
   verbose?: boolean
-  listProfiles?: boolean
+  listAgents?: boolean
   help?: boolean
 }
 
@@ -72,17 +74,24 @@ function parseArguments(): ParsedArgs {
   try {
     const { values, positionals } = parseArgs({
       options: {
+        agent: { type: "string", short: "a" },
         profile: { type: "string", short: "p" },
         message: { type: "string", short: "m" },
         session: { type: "string", short: "s" },
         model: { type: "string" },
         "no-store": { type: "boolean" },
         verbose: { type: "boolean" },
-        "list-profiles": { type: "boolean", short: "l" },
+        "list-agents": { type: "boolean", short: "l" },
+        "list-profiles": { type: "boolean" },
         help: { type: "boolean", short: "h" },
       },
       allowPositionals: true,
     })
+
+    if (values.agent && values.profile && values.agent !== values.profile) {
+      console.error("Error: --agent and --profile refer to different values; use --agent (--profile is an alias)")
+      process.exit(1)
+    }
 
     // Positional argument is treated as a message if --message is not given.
     const positionalMessage = positionals.join(" ")
@@ -95,13 +104,13 @@ function parseArguments(): ParsedArgs {
     }
 
     return {
-      profile: values.profile,
+      agent: values.agent ?? values.profile,
       message,
       sessionId: values.session,
       model: values.model,
       noStore: values["no-store"],
       verbose: values.verbose,
-      listProfiles: values["list-profiles"],
+      listAgents: values["list-agents"] || values["list-profiles"],
       help: values.help,
     }
   } catch (err: any) {
@@ -134,11 +143,11 @@ async function main() {
     process.exit(0)
   }
 
-  if (args.listProfiles) {
-    const profiles = listProfiles()
-    console.log("Available profiles:")
-    for (const p of profiles) {
-      console.log(`  - ${p}`)
+  if (args.listAgents) {
+    const agents = listAgents()
+    console.log("Available agents:")
+    for (const agent of agents) {
+      console.log(`  - ${agent}`)
     }
     process.exit(0)
   }
@@ -157,7 +166,7 @@ async function main() {
         "--preload", `${quarkDir}/preload.ts`, `${quarkDir}/src/tui/index.tsx`,
         // Forward the launch flags the TUI understands instead of silently
         // dropping them (`--model` maps to the TUI's runtime model override).
-        ...(args.profile ? ["--profile", args.profile] : []),
+        ...(args.agent ? ["--agent", args.agent] : []),
         ...(args.sessionId ? ["--session", args.sessionId] : []),
         ...(args.model ? ["--model", args.model] : []),
       ], {
@@ -174,11 +183,11 @@ async function main() {
     process.exit(0)
   }
 
-  // Resolve profile, then materialize it into a portable AgentDefinition.
-  // Tools and skills travel with the definition — nothing is registered globally.
-  const profile = resolveProfile(args.profile)
-  const promptResult = readPromptFile(profile)
-  const agent = await materializeAgent(profile, promptResult.content)
+  // Resolve the agent manifest, then materialize it into a portable
+  // AgentDefinition. Tools and skills travel with the definition — nothing is
+  // registered globally.
+  const agentDef = resolveAgent(args.agent)
+  const agent = await materializeAgent(agentDef)
 
   // Portable runtime init: storage root only (no global tools).
   ensureStorageRoot()
@@ -194,8 +203,8 @@ async function main() {
   if (parentSessionId) {
     await loadPlugins()
     const cleanupEventWriter = startEventWriter({
-      resolvedModel: args.model ?? profile.model,
-      profile: profile.id,
+      resolvedModel: args.model ?? agentDef.model,
+      profile: agentDef.id,
     })
     wireCliBus(bus)
     try {
