@@ -69,6 +69,7 @@ type BridgedEvent =
   | "tool-start"
   | "tool-input"
   | "tool-input-draft"
+  | "tool-output-delta"
   | "tool-running"
   | "tool-end"
   | "error"
@@ -181,6 +182,10 @@ function startTurn(
   let expectedSessionId = turn.runnerSessionId
   let chain: Promise<void> = Promise.resolve()
   const client: AgentContext = turn.client
+  // Accumulated streamed output per tool call. ACP replaces `rawOutput`, so
+  // every delta is re-sent as the full text so far — clients render a live
+  // tail instead of having to append.
+  const streamedOutput = new Map<string, string>()
 
   function enqueue(update: SessionUpdate): void {
     chain = chain
@@ -269,6 +274,16 @@ function startTurn(
       })
     }),
 
+    on("tool-output-delta", (data) => {
+      const accumulated = (streamedOutput.get(data.callId) ?? "") + data.delta
+      streamedOutput.set(data.callId, accumulated)
+      enqueue({
+        sessionUpdate: "tool_call_update",
+        toolCallId: callIds.forRaw(data.callId),
+        rawOutput: accumulated,
+      })
+    }),
+
     on("tool-running", (data) => {
       enqueue({
         sessionUpdate: "tool_call_update",
@@ -289,6 +304,7 @@ function startTurn(
         update.rawOutput = text
       }
       enqueue(update)
+      streamedOutput.delete(data.callId)
     }),
 
     on("error", (data) => {

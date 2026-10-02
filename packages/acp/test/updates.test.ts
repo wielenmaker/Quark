@@ -173,6 +173,44 @@ test("forwards streamed argument drafts as string rawInput before the final obje
   ])
 })
 
+test("forwards streamed tool output as accumulated rawOutput until the final result", async () => {
+  const { runner, bus } = makeRunner()
+  const c = makeClient()
+  const bridge = createUpdateBridge()
+  const t = turn(runner, c.client)
+  bridge.onTurnStart(t)
+
+  bus.emit("session-created", { sessionId: "runner-1" })
+  bus.emit("tool-start", { sessionId: "runner-1", messageId: "m1", partId: "t1", tool: "bash", callId: "call-1" })
+  bus.emit("tool-output-delta", { sessionId: "runner-1", messageId: "m1", callId: "call-1", delta: "tick 1\n" })
+  bus.emit("tool-output-delta", { sessionId: "runner-1", messageId: "m1", callId: "call-1", delta: "tick 2\n" })
+  bus.emit("tool-end", {
+    sessionId: "runner-1",
+    messageId: "m1",
+    partId: "t1",
+    tool: "bash",
+    callId: "call-1",
+    status: "completed",
+    output: "tick 1\ntick 2\n",
+  })
+  await bridge.onTurnEnd(t)
+
+  const toolCallId = updatesOf(c)[0].toolCallId
+  expect(updatesOf(c).slice(1)).toEqual([
+    // rawOutput is replaced, not appended: each delta re-sends the full text so
+    // a client can render a live tail. The final result replaces it once more.
+    { sessionUpdate: "tool_call_update", toolCallId, rawOutput: "tick 1\n" },
+    { sessionUpdate: "tool_call_update", toolCallId, rawOutput: "tick 1\ntick 2\n" },
+    {
+      sessionUpdate: "tool_call_update",
+      toolCallId,
+      status: "completed",
+      content: [{ type: "content", content: { type: "text", text: "tick 1\ntick 2\n" } }],
+      rawOutput: "tick 1\ntick 2\n",
+    },
+  ])
+})
+
 test("maps a failed tool to status failed with the error text", async () => {
   const { runner, bus } = makeRunner()
   const c = makeClient()

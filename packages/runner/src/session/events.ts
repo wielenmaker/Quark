@@ -41,6 +41,10 @@ export interface BusEvents {
   // JSON stream accumulated so far. Emitted per delta and never persisted;
   // the final `tool-input` carries the parsed object that replaces it.
   "tool-input-draft": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; text: string }
+  // Tool output as it is produced: `delta` is one throttled chunk of the
+  // command's stdout/stderr. Display-only; `tool-end` still carries the final
+  // (truncated) output that replaces it.
+  "tool-output-delta": { sessionId: string; messageId: string; callId: string; delta: string }
   "tool-running": { sessionId: string; messageId: string; callId: string }
   "tool-end": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; status: "completed" | "error"; output?: string; error?: string; diff?: string }
 
