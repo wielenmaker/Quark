@@ -37,6 +37,10 @@ export interface BusEvents {
   // Tool lifecycle
   "tool-start": { sessionId: string; messageId: string; partId: string; tool: string; callId: string }
   "tool-input": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; input: Record<string, unknown>; diff?: string }
+  // Tool arguments as the model is still writing them: `text` is the raw
+  // JSON stream accumulated so far. Emitted per delta and never persisted;
+  // the final `tool-input` carries the parsed object that replaces it.
+  "tool-input-draft": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; text: string }
   "tool-running": { sessionId: string; messageId: string; callId: string }
   "tool-end": { sessionId: string; messageId: string; partId: string; tool: string; callId: string; status: "completed" | "error"; output?: string; error?: string; diff?: string }
 

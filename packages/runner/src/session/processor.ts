@@ -129,6 +129,10 @@ async function* abortableStream(stream: AsyncIterable<any>, signal: AbortSignal)
 export async function processStream(input: ProcessInput): Promise<"stop" | "continue" | "branch"> {
   // Track tool parts by callId so we can update them as events arrive
   const toolParts = new Map<string, { partId: string; data: ToolPartData }>()
+  // Raw JSON argument text accumulated per callId while the model writes a
+  // tool call. Display-only (bus "tool-input-draft"); never persisted, and
+  // dropped as soon as the parsed tool-call replaces it.
+  const toolDrafts = new Map<string, string>()
   let currentText: { partId: string; data: TextPartData } | undefined
   let currentReasoning: { partId: string; data: ReasoningPartData } | undefined
   let lastFinish: string | undefined
@@ -233,6 +237,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               store,
             })
             toolParts.set(event.id, { partId, data })
+            toolDrafts.set(event.id, "")
             eventBus.emit("tool-start", {
               sessionId: sid,
               messageId: mid,
@@ -243,9 +248,26 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
             break
           }
 
-          case "tool-input-delta":
-            // Streaming input text — we wait for tool-call for final args
+          case "tool-input-delta": {
+            // Streaming argument text: relay the accumulated draft so the UI
+            // can show the model writing it. Final args still arrive via
+            // "tool-call", which replaces the draft.
+            const match = toolParts.get(event.id)
+            const delta = typeof event.delta === "string" ? event.delta : ""
+            if (match && delta) {
+              const text = (toolDrafts.get(event.id) ?? "") + delta
+              toolDrafts.set(event.id, text)
+              eventBus.emit("tool-input-draft", {
+                sessionId: sid,
+                messageId: mid,
+                partId: match.partId,
+                tool: match.data.tool,
+                callId: event.id,
+                text,
+              })
+            }
             break
+          }
 
           case "tool-input-end":
             break
@@ -266,6 +288,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
                 callId: event.toolCallId,
                 input: match.data.input,
               })
+              toolDrafts.delete(event.toolCallId)
             }
             break
           }
@@ -299,6 +322,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
                 diff,
               })
               toolParts.delete(event.toolCallId)
+              toolDrafts.delete(event.toolCallId)
             }
             break
           }
@@ -320,6 +344,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
                 error: match.data.error,
               })
               toolParts.delete(event.toolCallId)
+              toolDrafts.delete(event.toolCallId)
             }
             break
           }
@@ -463,6 +488,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
         }
       }
       toolParts.clear()
+      toolDrafts.clear()
 
       // Flush any in-progress text
       if (currentText) {

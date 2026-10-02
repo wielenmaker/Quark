@@ -68,6 +68,7 @@ type BridgedEvent =
   | "reasoning-delta"
   | "tool-start"
   | "tool-input"
+  | "tool-input-draft"
   | "tool-running"
   | "tool-end"
   | "error"
@@ -253,6 +254,18 @@ function startTurn(
         toolCallId: callIds.forRaw(data.callId),
         title: toolTitle(data.tool, data.input),
         rawInput: data.input,
+      })
+    }),
+
+    on("tool-input-draft", (data) => {
+      // ACP has no separate argument field, so the draft rides `rawInput` as a
+      // STRING: valid JSON, and unambiguous — Quark always sends final args as
+      // an object, so clients can render a string as "still writing" and let
+      // the next update replace it.
+      enqueue({
+        sessionUpdate: "tool_call_update",
+        toolCallId: callIds.forRaw(data.callId),
+        rawInput: data.text,
       })
     }),
 

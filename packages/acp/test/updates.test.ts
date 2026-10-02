@@ -144,6 +144,35 @@ test("translates the tool lifecycle with names, ids, status and raw input", asyn
   ])
 })
 
+test("forwards streamed argument drafts as string rawInput before the final object", async () => {
+  const { runner, bus } = makeRunner()
+  const c = makeClient()
+  const bridge = createUpdateBridge()
+  const t = turn(runner, c.client)
+  bridge.onTurnStart(t)
+
+  bus.emit("session-created", { sessionId: "runner-1" })
+  bus.emit("tool-start", { sessionId: "runner-1", messageId: "m1", partId: "t1", tool: "bash", callId: "call-1" })
+  bus.emit("tool-input-draft", { sessionId: "runner-1", messageId: "m1", partId: "t1", tool: "bash", callId: "call-1", text: '{"command":"car' })
+  bus.emit("tool-input-draft", { sessionId: "runner-1", messageId: "m1", partId: "t1", tool: "bash", callId: "call-1", text: '{"command":"cargo test"}' })
+  bus.emit("tool-input", { sessionId: "runner-1", messageId: "m1", partId: "t1", tool: "bash", callId: "call-1", input: { command: "cargo test" } })
+  await bridge.onTurnEnd(t)
+
+  const toolCallId = updatesOf(c)[0].toolCallId
+  expect(updatesOf(c).slice(1)).toEqual([
+    // Drafts stay strings: clients can tell "still writing" from final args,
+    // which always arrive as the argument object.
+    { sessionUpdate: "tool_call_update", toolCallId, rawInput: '{"command":"car' },
+    { sessionUpdate: "tool_call_update", toolCallId, rawInput: '{"command":"cargo test"}' },
+    {
+      sessionUpdate: "tool_call_update",
+      toolCallId,
+      title: "Bash cargo test",
+      rawInput: { command: "cargo test" },
+    },
+  ])
+})
+
 test("maps a failed tool to status failed with the error text", async () => {
   const { runner, bus } = makeRunner()
   const c = makeClient()
