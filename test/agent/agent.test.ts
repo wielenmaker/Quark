@@ -75,6 +75,22 @@ function agent(overrides: Partial<AgentDef> = {}): AgentDef {
 // resolveAgent
 // ---------------------------------------------------------------------------
 
+describe("profile fast mode", () => {
+  test("preserves true, false and omitted through materialization", async () => {
+    for (const fastMode of [true, false, undefined]) {
+      const agent = parseProfile({ model: { id: "openai/gpt-5.5", ...(fastMode !== undefined ? { fast_mode: fastMode } : {}) }, tools: [], skills: [] }, "speed")
+      expect(agent.fastMode).toBe(fastMode)
+      expect((await materializeAgent(agent)).fastMode).toBe(fastMode)
+    }
+  })
+  test("rejects non-booleans and speed without a model id", () => {
+    for (const value of ["true", 1, null]) {
+      expect(() => parseProfile({ model: { id: "openai/gpt-5.5", fast_mode: value } }, "speed")).toThrow("boolean")
+    }
+    expect(() => parseProfile({ model: { fast_mode: false } }, "speed")).toThrow("model.id")
+  })
+})
+
 describe("resolveAgent", () => {
   test("returns built-in coder when no config or agents exist", () => {
     const def = resolveAgent("coder")

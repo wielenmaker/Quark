@@ -42,6 +42,7 @@ interface CodexRequestBody {
 	temperature?: number
 	previous_response_id?: string
 	prompt_cache_key?: string
+	service_tier?: "priority" | "default"
 	reasoning?: { effort?: string; summary?: string; mode?: string; context?: string }
 }
 
@@ -452,6 +453,13 @@ function buildRequestBody(modelId: string, opts: LanguageModelV3CallOptions): Co
 	// Codex consumer API uses nested `reasoning: { effort, summary }`
 	// rather than the standard OpenAI `reasoningEffort` flat field.
 	const codexOpts = opts.providerOptions?.codex as Record<string, unknown> | undefined
+	const serviceTier = codexOpts?.serviceTier
+	if (serviceTier !== undefined) {
+		if (serviceTier !== "priority" && serviceTier !== "default") {
+			throw new Error("Codex serviceTier must be priority or default.")
+		}
+		body.service_tier = serviceTier
+	}
 	const reasoningEffort = codexOpts?.reasoningEffort as string | undefined
 	const reasoningSummary = codexOpts?.reasoningSummary as string | undefined
 	const reasoningMode = codexOpts?.reasoningMode as string | undefined

@@ -28,6 +28,7 @@ import { generateSessionTitle } from "./title";
 import { resolveToolSet } from "../tool/ai-adapter";
 import { resolveModel, resolveModelRuntime, type ResolveModelOptions } from "../provider/resolver";
 import type { CatalogRegistry } from "../provider/catalog-registry";
+import { withFastMode } from "../provider/fast-mode";
 import type { AgentDefinition } from "../agent";
 import { PORTABLE_POLICIES, resolveRunPolicies, type BranchingConfig, type RunPolicies } from "./policies";
 
@@ -603,14 +604,14 @@ async function loop(
     );
 
     // 6. Stream + process
-    const thinkingProviderOptions = resolvedModel.provider.adapter.encodeReasoning?.({
+    const thinkingProviderOptions = withFastMode(resolvedModel.provider.definition, resolvedModel.provider.adapter.encodeReasoning?.({
       model: resolvedModel.catalogModel,
       config: {
         effort: thinkingEffort ?? (usingAgentModel ? agent.thinkingEffort ?? "none" : "none"),
         mode: usingAgentModel ? agent.thinkingMode ?? "standard" : "standard",
         modeExplicit: usingAgentModel && agent.thinkingMode !== undefined,
       },
-    });
+    }), usingAgentModel ? agent.fastMode : undefined);
     const result = await processStream({
       model,
       resolvedModel,

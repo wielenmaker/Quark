@@ -153,6 +153,12 @@ warns and ignores the setting when the selected model does not support modes.
 Older inline profiles using `model: { id, thinking: { effort, mode } }` are
 supported by the offline migration only. New single-file profiles use nested
 `model.id`, `model.thinking_effort`, and optional `model.thinking_mode`.
+For `openai` and `openai-codex`, optional `model.fast_mode: true` requests
+priority processing, independently of thinking effort. Fast API processing may
+cost extra; Codex availability depends on the subscription/backend. `false`
+explicitly requests standard processing; omitting it leaves the provider default
+unchanged. Explicit fast-mode settings on other providers are rejected. The
+profile setting does not carry over to a different model selected at runtime.
 Profiles are global; project-local agent/profile directories are not loaded.
 
 Set provider API keys through `quark auth login`, or use provider-standard

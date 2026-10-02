@@ -28,6 +28,8 @@ export interface AgentDefinition {
   thinkingEffort?: string
   /** Optional reasoning mode for models that support it */
   thinkingMode?: string
+  /** Fast processing (may cost extra); false requests standard, omitted inherits provider defaults. */
+  fastMode?: boolean
   /** Resolved system-prompt text (never a config path) */
   instructions: string
   /** Concrete tool definitions, scoped to the agent instance */

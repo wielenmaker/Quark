@@ -35,6 +35,8 @@ export interface AgentDef {
   model?: string
   thinkingEffort?: string
   thinkingMode?: string
+  /** Optional fast processing; omitted inherits the provider default. */
+  fastMode?: boolean
 }
 
 export const BUILTIN_TOOLS = ["read", "look", "write", "edit", "bash", "skill", "todo"]
@@ -92,7 +94,9 @@ export function parseProfile(raw: unknown, id: string): AgentDef {
   }
   const effort = optionalString(modelFields?.thinking_effort, "model.thinking_effort")
   const mode = optionalString(modelFields?.thinking_mode, "model.thinking_mode")
-  if ((effort || mode) && !modelId) throw new Error("model.id is required when thinking is configured.")
+  const fastMode = modelFields?.fast_mode
+  if (fastMode !== undefined && typeof fastMode !== "boolean") throw new Error("model.fast_mode must be a boolean.")
+  if ((effort || mode || fastMode !== undefined) && !modelId) throw new Error("model.id is required when thinking or fast mode is configured.")
   if (profile.prompt !== undefined && typeof profile.prompt !== "string") {
     throw new Error("prompt must be a string.")
   }
@@ -107,6 +111,7 @@ export function parseProfile(raw: unknown, id: string): AgentDef {
     ...(modelId ? { model: modelId } : {}),
     ...(effort ? { thinkingEffort: effort } : {}),
     ...(mode ? { thinkingMode: mode } : {}),
+    ...(fastMode !== undefined ? { fastMode } : {}),
   }
 }
 
@@ -221,5 +226,6 @@ export async function materializeAgent(
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.thinkingEffort ? { thinkingEffort: agent.thinkingEffort } : {}),
     ...(agent.thinkingMode ? { thinkingMode: agent.thinkingMode } : {}),
+    ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
   }
 }
