@@ -55,7 +55,7 @@ export interface BusEvents {
 
   // Step boundaries
   "step-start": { sessionId: string; messageId: string }
-  "step-finish": { sessionId: string; messageId: string; data: StepFinishData }
+  "step-finish": { sessionId: string; messageId: string; data: StepFinishData; contextWindow?: number }
 
   // Assistant message completed
   "assistant-message-end": { sessionId: string; messageId: string; userMessageId: string; finish: "stop" | "tool-calls" | "length" | "aborted" }

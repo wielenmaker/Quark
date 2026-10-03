@@ -49,7 +49,7 @@ import { isAbsolute } from "node:path"
 import type { Session, SessionStore } from "@quark/runner"
 import type { SessionBridge } from "./sessions"
 import { connectStdioServers, requireStdio, type McpConnection } from "./mcp"
-import { historyToUpdates } from "./updates"
+import { historyToUpdates, lastUsageUpdate } from "./updates"
 import type { ToolCallIds } from "./tool-call-ids"
 
 export interface LifecycleOptions {
@@ -87,7 +87,10 @@ export interface SessionLifecycle {
    */
   capabilities: AgentCapabilities
   listSessions(params: ListSessionsRequest): ListSessionsResponse
-  resumeSession(params: ResumeSessionRequest): ResumeSessionResponse | Promise<ResumeSessionResponse>
+  resumeSession(
+    params: ResumeSessionRequest,
+    client: AgentContext,
+  ): ResumeSessionResponse | Promise<ResumeSessionResponse>
   /** Adopt the session, then replay its history as `session/update` notifications. */
   loadSession(params: LoadSessionRequest, client: AgentContext): Promise<LoadSessionResponse>
   deleteSession(params: DeleteSessionRequest): void
@@ -190,6 +193,17 @@ export function createSessionLifecycle(
     return configOptions?.length ? { configOptions } : {}
   }
 
+  /**
+   * Replay the session's last reported token usage, so a reopened conversation
+   * shows its context-window meter without waiting for the next turn. Sessions
+   * whose steps predate the persisted window size stay silent.
+   */
+  async function notifyUsage(sessionId: string, client: AgentContext): Promise<void> {
+    const usage = lastUsageUpdate(store.replay(sessionId).parts)
+    if (!usage) return
+    await client.notify(methods.client.session.update, { sessionId, update: usage })
+  }
+
   return {
     // Keep this in lockstep with the handlers below: one entry per method that
     // is actually installed.
@@ -218,13 +232,23 @@ export function createSessionLifecycle(
       return { sessions: listing }
     },
 
-    resumeSession(params) {
+    resumeSession(params, client) {
+      // `adopt` throws synchronously for unsafe requests (unknown session, cwd
+      // mismatch, active turn), and the no-usage path stays synchronous too.
       const pending = adopt(params)
-      // Nothing is replayed: the next prompt hands the runner the stored session
-      // ID, and the engine loads the persisted messages into the model context.
       const respond = (): ResumeSessionResponse => configOptionsResponse(params.sessionId)
-      if (pending) return pending.then(respond)
-      return respond()
+      // History is not replayed (the next prompt hands the runner the stored
+      // session ID), but the last reported usage is: a client reattaching after
+      // a restart has no live thread to seed its token meter from.
+      const usage = lastUsageUpdate(store.replay(params.sessionId).parts)
+      if (!pending && !usage) return respond()
+      return (async () => {
+        if (pending) await pending
+        if (usage) {
+          await client.notify(methods.client.session.update, { sessionId: params.sessionId, update: usage })
+        }
+        return respond()
+      })()
     },
 
     async loadSession(params, client) {
@@ -235,6 +259,9 @@ export function createSessionLifecycle(
       for (const update of historyToUpdates({ messages, parts }, options.toolCallIds)) {
         await client.notify(methods.client.session.update, { sessionId: params.sessionId, update })
       }
+      // The token meter is session state, not history: restore it last, after
+      // the conversation it belongs to.
+      await notifyUsage(params.sessionId, client)
       return configOptionsResponse(params.sessionId)
     },
 
@@ -273,7 +300,9 @@ export function registerLifecycle(
 ): SessionLifecycle {
   const lifecycle = createSessionLifecycle(sessions, options)
   app.onRequest(methods.agent.session.list, ({ params }) => lifecycle.listSessions(params))
-  app.onRequest(methods.agent.session.resume, ({ params }) => lifecycle.resumeSession(params))
+  app.onRequest(methods.agent.session.resume, ({ params, client }) =>
+    lifecycle.resumeSession(params, client),
+  )
   app.onRequest(methods.agent.session.load, ({ params, client }) => lifecycle.loadSession(params, client))
   app.onRequest(methods.agent.session.delete, ({ params }) => lifecycle.deleteSession(params))
   app.onRequest(methods.agent.session.close, ({ params }) => lifecycle.closeSession(params))

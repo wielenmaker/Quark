@@ -13,13 +13,15 @@
 // flush queued updates before its JSON-RPC error is written).
 //
 // Deliberately NOT translated:
-//   * `step-finish` — ACP `usage_update` requires the context-window size,
-//     which the bus event does not carry (only tokens/cost). Sending `size: 0`
-//     would lie to the client.
 //   * `error` — stable ACP v1 has no turn-error update; the rejected
 //     `session/prompt` response is the error channel. Logged for diagnostics.
 //   * `diff` — ACP `Diff` wants old/new text; Quark emits a unified diff
 //     string, which cannot be losslessly converted.
+//
+// `step-finish` becomes `usage_update` (used = the step's input tokens, size =
+// the model's context window). It is only sent when both are known: `size: 0`
+// would lie to the client. Cost is deliberately not sent — clients show the
+// window, not the bill.
 //
 // Stop reasons stay sessions.ts's job (it maps the runner outcome to
 // end_turn/cancelled); this bridge preserves the runner result unchanged. ACP
@@ -72,6 +74,7 @@ type BridgedEvent =
   | "tool-output-delta"
   | "tool-running"
   | "tool-end"
+  | "step-finish"
   | "error"
 
 /** Per-turn bridge state. */
@@ -307,6 +310,16 @@ function startTurn(
       streamedOutput.delete(data.callId)
     }),
 
+    on("step-finish", (data) => {
+      // Context-window usage = input tokens only. Cache read/write are
+      // breakdowns *within* input; summing them would show >100%.
+      const used = data.data.tokens?.input ?? 0
+      const size = data.contextWindow ?? 0
+      if (used > 0 && size > 0) {
+        enqueue({ sessionUpdate: "usage_update", used, size })
+      }
+    }),
+
     on("error", (data) => {
       options.log?.(
         `runner error: ${data.error instanceof Error ? data.error.message : String(data.error)}`,
@@ -381,6 +394,33 @@ export function createUpdateBridge(options: UpdateBridgeOptions = {}): UpdateBri
  * raw id here; the connection passes its registry so replay ids cannot collide
  * with a later live-turn id. The persisted `callId` is never rewritten.
  */
+/** The persisted shape of a step-finish part, as much as replay needs. */
+type StepFinishUsage = { tokens?: { input?: number }; contextWindow?: number }
+
+/**
+ * The trailing `usage_update` for a replayed session, read from its most
+ * recent step-finish part — the same numbers the live bridge reported for that
+ * step. `null` when the session never finished a step, or when the window size
+ * wasn't recorded (sessions written before it was persisted): the meter stays
+ * hidden rather than showing a fabricated window.
+ */
+export function lastUsageUpdate(parts: StoredPart[]): SessionUpdate | null {
+  for (let index = parts.length - 1; index >= 0; index--) {
+    const part = parts[index]
+    if (!part || part.type !== "step-finish") continue
+    const data = parsePart<StepFinishUsage>(part)
+    const used = data?.tokens?.input ?? 0
+    const size = data?.contextWindow ?? 0
+    // The most recent step is authoritative: an older step's numbers would be
+    // stale, and a step without a window has none to offer.
+    if (used > 0 && size > 0) {
+      return { sessionUpdate: "usage_update", used, size }
+    }
+    return null
+  }
+  return null
+}
+
 export function historyToUpdates(
   input: { messages: StoredMessage[]; parts: StoredPart[] },
   callIds: ToolCallIds = createToolCallIds(),

@@ -5,7 +5,7 @@
 // before the wrapped `prompt` resolves.
 
 import { expect, test } from "bun:test"
-import { createUpdateBridge } from "../src/updates"
+import { createUpdateBridge, lastUsageUpdate } from "../src/updates"
 import type { SessionTurn } from "../src/sessions"
 
 type Handler = (data: any) => void
@@ -338,7 +338,27 @@ test("onTurnStart no longer monkey-patches runner.prompt", async () => {
   await bridge.onTurnEnd(t)
 })
 
-test("does not translate step-finish (no context-window size on the bus)", async () => {
+test("step-finish becomes usage_update with the model's context window", async () => {
+  const { runner, bus } = makeRunner()
+  const c = makeClient()
+  const bridge = createUpdateBridge()
+  bridge.onTurnStart(turn(runner, c.client))
+
+  bus.emit("session-created", { sessionId: "runner-1" })
+  bus.emit("step-finish", {
+    sessionId: "runner-1",
+    messageId: "m1",
+    data: { reason: "stop", tokens: { input: 10, output: 5 } },
+    contextWindow: 1000,
+  })
+  await runner.prompt({})
+
+  expect(updatesOf(c)).toEqual([
+    { sessionUpdate: "usage_update", used: 10, size: 1000 },
+  ])
+})
+
+test("step-finish without a context window stays silent (size 0 would lie)", async () => {
   const { runner, bus } = makeRunner()
   const c = makeClient()
   const bridge = createUpdateBridge()
@@ -380,4 +400,45 @@ test("onTurnEnd is a no-op for a turn the default bridge never started", async (
   await bridge.onTurnEnd(t)
   expect(c.notifications).toHaveLength(0)
   expect(runner.bus).toBeDefined()
+})
+
+// ---------------------------------------------------------------------------
+// lastUsageUpdate — the token meter a replayed session restores
+// ---------------------------------------------------------------------------
+
+function stepFinish(data: unknown, index = 0) {
+  return {
+    id: `p${index}`,
+    messageId: `m${index}`,
+    sessionId: "s1",
+    type: "step-finish",
+    data: JSON.stringify(data),
+  }
+}
+
+test("lastUsageUpdate reads the most recent step's tokens and window", () => {
+  const parts: any[] = [
+    stepFinish({ reason: "stop", tokens: { input: 100 }, contextWindow: 200_000 }, 0),
+    stepFinish({ reason: "stop", tokens: { input: 1234 }, contextWindow: 200_000 }, 1),
+  ]
+  expect(lastUsageUpdate(parts)).toEqual({
+    sessionUpdate: "usage_update",
+    used: 1234,
+    size: 200_000,
+  })
+})
+
+test("lastUsageUpdate stays silent without a persisted window or tokens", () => {
+  expect(lastUsageUpdate([])).toBeNull()
+  expect(lastUsageUpdate([stepFinish({ reason: "stop", tokens: { input: 100 } })])).toBeNull()
+  expect(
+    lastUsageUpdate([stepFinish({ reason: "stop", tokens: { input: 0 }, contextWindow: 200_000 })]),
+  ).toBeNull()
+  // The most recent step is authoritative: an older, complete step is not reused.
+  expect(
+    lastUsageUpdate([
+      stepFinish({ reason: "stop", tokens: { input: 100 }, contextWindow: 200_000 }, 0),
+      stepFinish({ reason: "stop", tokens: { input: 50 } }, 1),
+    ]),
+  ).toBeNull()
 })

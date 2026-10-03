@@ -63,6 +63,12 @@ export interface StepFinishData {
   charge?: Charge
   /** Read compatibility only. */
   cost?: number
+  /**
+   * Model context window at this step. Persisted so `session/load` can restore
+   * the token meter (as a `usage_update`) without re-resolving the catalog.
+   * Absent on sessions written before it was recorded.
+   */
+  contextWindow?: number
 }
 
 export interface SummaryData {

@@ -369,6 +369,7 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
             const charge = runtime
               ? calculateCharge(normalized.tokens, runtime.pricingSnapshot)
               : { kind: "unknown" as const, reason: "runtime pricing unavailable" }
+            const contextWindow = getContextWindow(runtime?.catalogModel.limit ?? null)
             const stepData: StepFinishData = {
               reason: event.finishReason,
               ...(runtime ? {
@@ -378,6 +379,8 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               tokens: normalized.tokens,
               ...(normalized.rawUsage ? { rawUsage: normalized.rawUsage } : {}),
               charge,
+              // Persisted so a later `session/load` can replay the meter.
+              ...(contextWindow > 0 ? { contextWindow } : {}),
             }
             addPart({
               messageId: mid,
@@ -386,7 +389,14 @@ export async function processStream(input: ProcessInput): Promise<"stop" | "cont
               data: stepData,
               store,
             })
-            eventBus.emit("step-finish", { sessionId: sid, messageId: mid, data: stepData })
+            eventBus.emit("step-finish", {
+              sessionId: sid,
+              messageId: mid,
+              data: stepData,
+              // The ACP bridge turns this into `usage_update`; without the window
+              // size it must stay silent rather than send `size: 0`.
+              contextWindow,
+            })
 
             addTokenUsage(aggregateTokens, normalized.tokens)
             charges.push(charge)
