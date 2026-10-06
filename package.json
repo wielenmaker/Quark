@@ -14,6 +14,8 @@
     "test": "bun test",
     "dev": "bun --preload ./packages/quark/preload.ts packages/quark/src/tui/index.tsx",
     "cli": "bun --preload ./packages/quark/preload.ts packages/quark/src/cli.ts",
+    "install:local": "bun scripts/install-local.ts",
+    "verify:install": "bun scripts/verify-install.ts",
     "docs": "typedoc"
   },
   "devDependencies": {

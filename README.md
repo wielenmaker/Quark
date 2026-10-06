@@ -88,7 +88,14 @@ docker build -t quark .
 docker run -it --rm -v ~/.config/quark:/root/.config/quark quark
 ```
 
-Install globally from the checkout: `npm link` (then use `quark` anywhere).
+Install locally from the checkout (no registry needed):
+
+```bash
+bun scripts/install-local.ts   # build → pack → install → verify → switch
+quark doctor                   # check runtimes, config, tools, subagent command
+```
+
+The command lands at `~/.local/bin/quark` and runs a versioned copy under `~/.local/share/quark` (`QUARK_HOME` overrides; `--list`, `--use <version>`, `--rollback` manage versions). Your config at `~/.config/quark` is never touched. Development checkouts keep using `bin/quark` / `bun run dev`.
 
 ## CLI
 
@@ -104,6 +111,7 @@ Install globally from the checkout: `npm link` (then use `quark` anywhere).
 | `quark --verbose` | Print every tool call and result to stderr |
 | `quark auth login\|status\|logout <provider>` | Manage credentials |
 | `quark acp [--agent <id>]` | Serve ACP over stdio (editor integration) |
+| `quark doctor` | Diagnose the install: app location, runtimes, config, tools, subagent command |
 
 TUI essentials: `/new` fresh session · `/agent` switch agent · `/settings` edit config · `/undo` revert last file changes.
 
@@ -152,7 +160,7 @@ prompt: |
 ## Tools, skills, subagents
 
 - **Engine built-ins:** `read`, `look` (images), `skill`, `question` (ask the user mid-run).
-- **External tools:** TypeScript modules at `<config>/tools/<id>.ts`, referenced by id from an agent's `tools[]`. Typical set: `write`, `edit`, `bash`, `glob`, `grep`, `websearch`, `webfetch`, `todo`.
+- **External tools:** TypeScript modules at `<config>/tools/<id>.ts`, referenced by id from an agent's `tools[]`. Typical set: `write`, `edit`, `bash`, `glob`, `grep`, `websearch`, `webfetch`, `todo`. The typical set ships with the app (compiled into `dist/tools`); a personal file of the same id overrides the bundled one.
 - **Skills:** progressive-disclosure instructions at `.quark/skills/*/SKILL.md` (project) and `<config>/skills/*/SKILL.md` (global).
 - **Subagents:** a subagent is an agent exposed as a tool. It runs in an isolated child session, so its reasoning never pollutes the parent transcript.
 - **MCP:** when driven over ACP, stdio MCP servers handed over by the client are connected per session, and their tools are namespaced `mcp__<server>__<tool>`.

@@ -1,10 +1,13 @@
-// Tool loader — load agent-declared tools from <config>/tools/
+// Tool loader — load agent-declared tools from <config>/tools/, falling back
+// to the standard tools bundled with the app.
 //
 // App-side filesystem adapter: discovery/import lives here, while the ToolDef
 // contract and registry live in `@quark/runner` (tool/tool, tool/registry).
 //
-// Tools are loaded by ID from an agent's tools[] array.
-// Each tool lives at <config>/tools/{id}.ts
+// Tools are loaded by ID from an agent's tools[] array. Lookup order:
+//   1. `<config>/tools/{id}.ts|js`   — personal tools override bundled ones
+//   2. `<appRoot>/dist/tools/{id}.js` — bundled tools (compiled at build time)
+//   3. `<appRoot>/tools/{id}.ts`      — bundled source (unbundled dev runs)
 // Notifications surface any load failures.
 
 import * as fs from "fs"
@@ -12,12 +15,26 @@ import * as path from "path"
 import { pathToFileURL } from "url"
 import { register, validateTool } from "@quark/runner/tool/registry"
 import { configDir } from "./config/config"
+import { resolveAppPaths } from "./app-paths"
 import { error as notifyError, warn as notifyWarn } from "@quark/runner/notification/notification"
 import type { ToolDef } from "@quark/runner/tool/tool"
 
-/** Tools directory, resolved per call so QUARK_CONFIG_DIR stays authoritative. */
+/** Personal tools directory, resolved per call so QUARK_CONFIG_DIR stays authoritative. */
 function toolsDir(): string {
   return path.join(configDir(), "tools")
+}
+
+/** First existing candidate file for a tool id, in lookup order. */
+function findToolFile(id: string): string | undefined {
+  const { appRoot } = resolveAppPaths()
+  const dirs = [toolsDir(), path.join(appRoot, "dist", "tools"), path.join(appRoot, "tools")]
+  for (const dir of dirs) {
+    for (const extension of [".ts", ".js"]) {
+      const file = path.join(dir, `${id}${extension}`)
+      if (fs.existsSync(file)) return file
+    }
+  }
+  return undefined
 }
 
 // Engine-owned tools (supplied by @quark/runner, never loaded from disk)
@@ -37,9 +54,10 @@ export interface LoadResult {
 
 /**
  * Load tools declared in an agent's tools[] array.
- * Each tool is loaded from <config>/tools/{id}.ts
- * Engine-owned tools (read, look, skill, question) are skipped — they come
- * from `@quark/runner` and are materialized by `agent/agent.ts`.
+ * Each tool is resolved via {@link findToolFile}: personal tools first, then
+ * the bundled standard tools. Engine-owned tools (read, look, skill, question)
+ * are skipped — they come from `@quark/runner` and are materialized by
+ * `agent/agent.ts`.
  *
  * @param opts.register - When `false`, return concrete definitions in
  *   {@link LoadResult.defs} without registering them globally. Used by the
@@ -49,7 +67,6 @@ export async function loadTools(
   toolIds: string[],
   opts: { register?: boolean } = {},
 ): Promise<LoadResult> {
-  const dir = toolsDir()
   const result: LoadResult = {
     loaded: [],
     missing: [],
@@ -64,22 +81,12 @@ export async function loadTools(
     return result
   }
 
-  // Check if tools directory exists
-  if (!fs.existsSync(dir)) {
-    // All tools are missing
-    for (const id of toLoad) {
-      result.missing.push(id)
-      notifyError("Tool Not Found", `'${id}' — ~/.config/quark/tools/ does not exist`)
-    }
-    return result
-  }
-
   // Load each declared tool
   for (const id of toLoad) {
-    const filePath = path.join(dir, `${id}.ts`)
+    const filePath = findToolFile(id)
 
-    // Check file exists
-    if (!fs.existsSync(filePath)) {
+    // Check the file exists anywhere we look
+    if (!filePath) {
       result.missing.push(id)
       notifyWarn("Tool Not Found", `'${id}' — create ~/.config/quark/tools/${id}.ts`)
       continue

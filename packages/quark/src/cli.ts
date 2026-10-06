@@ -35,6 +35,7 @@ Usage: quark [options] [message]
        quark auth <login|status|logout> [provider]
        quark acp [--profile <name>]   Serve ACP (Agent Client Protocol) over stdio
                                      --agent/-a is an alias; -p for --profile
+       quark doctor                   Diagnose the install, config, tools, and runtimes
 
 Options:
   -a, --agent <name>            Agent to use (default: from config)
@@ -139,6 +140,18 @@ async function main() {
     return
   }
 
+  // `quark doctor` — read-only diagnosis. Dispatched before argument parsing
+  // so "doctor" is never treated as a positional message.
+  if (process.argv[2] === "doctor") {
+    try {
+      const { runDoctorCommand } = await import("./doctor")
+      process.exit(await runDoctorCommand(process.argv.slice(3)))
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      process.exit(1)
+    }
+  }
+
   const args = parseArguments()
 
   if (args.verbose) setVerbose(true)
@@ -160,20 +173,25 @@ async function main() {
   // No message provided → launch interactive TUI
   if (!args.message) {
     const { execFileSync } = await import("child_process")
-    const { fileURLToPath } = await import("url")
-    const { dirname, resolve } = await import("path")
-    const thisDir = typeof import.meta.dir === "string"
-      ? import.meta.dir
-      : dirname(fileURLToPath(import.meta.url))
-    const quarkDir = process.env.QUARK_DIR ?? resolve(thisDir, "..")
+    const { resolveAppPaths, findBun } = await import("./app-paths")
+    const { appRoot } = resolveAppPaths()
+    const bun = findBun()
+    if (!bun) {
+      console.error("Interactive mode requires Bun. Install it from https://bun.sh, then run quark again.")
+      process.exit(1)
+    }
     try {
-      execFileSync("bun", tuiLaunchArgs(quarkDir, args), {
+      execFileSync(bun, tuiLaunchArgs(appRoot, args), {
         stdio: "inherit",
-        env: { ...process.env, QUARK_DIR: quarkDir },
+        env: { ...process.env, QUARK_DIR: appRoot },
       })
     } catch (error: any) {
       if (error?.code === "ENOENT") {
         console.error("Interactive mode requires Bun. Install it from https://bun.sh, then run quark again.")
+        process.exit(1)
+      }
+      if (String(error?.message).includes("Compiled TUI is missing")) {
+        console.error(error.message)
         process.exit(1)
       }
       throw error

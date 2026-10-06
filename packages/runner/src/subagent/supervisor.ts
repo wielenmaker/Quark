@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { bus } from "../session/events"
 import type { ToolContext } from "../tool/tool"
-import { resolveSubagentCommand } from "./executable"
+import { resolveSubagentCommand, type SubagentCommand } from "./executable"
 import {
   SUBAGENT_EVENT_PREFIX,
   parseChildEventLine,
@@ -36,12 +36,14 @@ function messageOf(value: unknown): string {
 export async function runSubagent(
   input: { profile: string; prompt: string },
   ctx: ToolContext,
+  /** Explicit child command; hosts resolve their own executable and pass it. */
+  executable?: SubagentCommand,
 ): Promise<SubagentRunResult> {
   if (ctx.abort.aborted) {
     throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
   }
   const eventBus = ctx.bus ?? bus
-  const runtime = resolveSubagentCommand()
+  const runtime = executable ?? resolveSubagentCommand()
   const childArgs = [
     ...runtime.args,
     "--agent", input.profile,

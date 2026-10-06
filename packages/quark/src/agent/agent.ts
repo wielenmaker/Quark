@@ -12,6 +12,7 @@ import { questionTool } from "@quark/runner/tool/question"
 import { profileSkills, type SkillDefinition } from "@quark/runner/skill/skill"
 import { warn as notifyWarn } from "@quark/runner/notification/notification"
 import { loadTools } from "../tool-loader"
+import { resolveSubagentExecutable } from "../app-paths"
 import { configDir, loadConfig } from "../config/config"
 import type { AgentDefinition } from "@quark/runner/agent"
 import type { ToolDef } from "@quark/runner/tool/tool"
@@ -207,9 +208,10 @@ export async function materializeAgent(
 
   // Sub-agent delegation is an app concern: `subagents` becomes a concrete
   // tool carrying the allowed ids, so the engine never reads agent YAML and
-  // the child process resolves its own agent.
+  // the child process resolves its own agent. The launch command is resolved
+  // here — the app knows where its own CLI lives; the engine must not guess.
   if (agent.subAgents && agent.subAgents.length > 0) {
-    tools.push(createSubagentTool(agent.subAgents))
+    tools.push(createSubagentTool(agent.subAgents, { executable: resolveSubagentExecutable() }))
   }
 
   return {

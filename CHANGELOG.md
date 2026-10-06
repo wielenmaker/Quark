@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Local installation from the checkout: `bun scripts/install-local.ts` packs the workspace packages, installs them with dependencies into a versioned tree under `~/.local/share/quark` (`QUARK_HOME` overrides), verifies the install boots, then atomically switches the `current` pointer and writes the `~/.local/bin/quark` launcher. `--list`, `--use <version>`, and `--rollback` manage installed versions; `~/.config/quark` is never touched.
+- `quark doctor`: read-only diagnosis of the app location, Node/Bun runtimes, config and profile discovery, tool-file health (imports every personal and bundled tool), session storage, ripgrep availability, and the resolved subagent command. Exit code 1 on hard failures.
+- Bundled standard tools: `bash`, `edit`, `write`, `grep`, `glob`, `websearch`, `webfetch`, `todo` ship with the app (compiled into `dist/tools`); personal tools in `<config>/tools/` keep precedence.
 - ACP profile selector: `quark acp` advertises every agent manifest as a `category: "mode"` session config option, so an editor (Zed) renders them as its mode picker. Switching profile rebinds that session's runner to the new profile's agent — tools, system prompt, skills, and model — on the same persisted session, and drops the session's explicit model/effort picks so the profile's own settings apply. The model and effort pickers follow the selected profile's own settings rather than the launch-time agent's.
 - `quark acp --profile <id>` (also `-p`) selects the profile sessions start on. `--agent`/`-a` is an alias for it; an id no manifest backs is refused at launch, naming the available profiles.
 - HTTP runner API for external orchestrators. `POST /api/runners` mints an isolated execution instance (own event bus, cancellation state, and hooks) bound to a configured agent; `POST /api/runners/:id/session/prompt`, `GET /api/runners/:id/sessions/:sessionId`, `GET …/events`, `POST …/cancel`, and `DELETE /api/runners/:id` drive it.
@@ -21,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `QUARK_DIR` is no longer required for normal use. The CLI, TUI, bundled tools, and subagent launches resolve from the running app's own location (`src/app-paths.ts`); `QUARK_DIR` remains supported as an explicit override, and `quark doctor` reports when it is set.
+- Subagent children spawn from an explicit command resolved by the app and passed through `createSubagentTool({ executable })`, instead of argv/marker-path guessing inside the engine.
 - CLI/TUI session actions now use the active runtime's store for resume, listing, rename, pin, branching, replay, and export. Existing JSONL session paths and format are unchanged by this refactor.
 - `/undo` is supported only with the app's default JSONL store. Custom stores fail before restoring files or rewriting session history; their runs do not write global undo snapshots.
 - **Breaking (SDK):** `@quark/runner` no longer exports the singleton `prompt`, `cancel`, `isActive`, `bus`, `globalHooks`, `register`, or `listTools`. Use `createRunner({ agent, store?, plugins?, hooks? })`, then `runner.prompt()`, `runner.cancel()`, `runner.bus`, and `runner.store`. The internal singleton subpaths still exist for the web backend's local routes; they are not removed by this change.

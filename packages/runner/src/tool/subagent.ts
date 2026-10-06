@@ -1,6 +1,17 @@
 import { z } from "zod"
 import { runSubagent } from "../subagent/supervisor"
+import type { SubagentCommand } from "../subagent/executable"
 import { defineTool } from "./tool"
+
+/** Host-supplied overrides for the subagent tool. */
+export interface SubagentToolOptions {
+  /**
+   * Explicit child command. The app computes this once from its own location
+   * (see the app's app-paths module); the engine falls back to argv-based
+   * auto-detection when omitted.
+   */
+  executable?: SubagentCommand
+}
 
 /**
  * Delegate tool for a fixed set of child agent IDs.
@@ -9,7 +20,7 @@ import { defineTool } from "./tool"
  * profile config and bakes the tool into the AgentDefinition). The engine
  * never reads profile config here; the child validates its own id.
  */
-export function createSubagentTool(allowedProfiles: string[]) {
+export function createSubagentTool(allowedProfiles: string[], options: SubagentToolOptions = {}) {
   const allowed = new Set(allowedProfiles)
   return defineTool({
     id: "subagent",
@@ -23,7 +34,7 @@ export function createSubagentTool(allowedProfiles: string[]) {
         throw new Error(`Subagent "${args.profile}" is not allowed. Available agents: ${allowedProfiles.join(", ")}`)
       }
 
-      const result = await runSubagent(args, ctx)
+      const result = await runSubagent(args, ctx, options.executable)
       return {
         title: `Subagent: ${args.profile}`,
         output: result.output,

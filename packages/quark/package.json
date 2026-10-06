@@ -10,6 +10,7 @@
   "files": [
     "dist",
     "src",
+    "tools",
     "preload.ts",
     "README.md",
     "LICENSE"
@@ -26,12 +27,16 @@
     "@quark/acp": "0.1.0",
     "@quark/runner": "0.1.0",
     "ai": "^6.0.116",
+    "glob": "^13.0.6",
     "marked": "^17.0.6",
     "solid-js": "1.9.9",
-    "yaml": "^2.8.2"
+    "turndown": "^7.2.2",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^25.5.0"
+    "@types/node": "^25.5.0",
+    "@types/turndown": "^5.0.5"
   }
 }
