@@ -19,6 +19,7 @@ import { effectiveModel, runAcpStdio, type ModelOption, type ProfileOption } fro
 import { loadAgents, materializeAgent, resolveAgent } from "./agent/agent"
 import { loadConfig } from "./config/config"
 import { loadAmbientInstructions } from "./ambient"
+import { useRunnerSessionRoot } from "./session-root"
 
 /**
  * Whether the model spec (e.g. "openai/gpt-5.6-luna") accepts image input,
@@ -221,6 +222,10 @@ function namesProfile(argv: string[]): boolean {
  * exit code; the caller exits with it.
  */
 export async function runAcpCommand(argv: string[]): Promise<number> {
+  // Sessions live in the shared runner namespace (`…/session/runners/`), the
+  // same one the CLI and TUI use, so a session opened here is one the TUI
+  // lists and can resume. Must run before anything reads or creates a session.
+  useRunnerSessionRoot()
   const explicitProfile = parseProfileFlag(argv)
   const profiles = loadProfileOptions()
   const defaultProfile = resolveStartProfile(explicitProfile, profiles)
@@ -260,8 +265,9 @@ export async function runAcpCommand(argv: string[]): Promise<number> {
         resolve: { providers: config.providers },
       })
     },
-    // Same persistent store the CLI/TUI use, so ACP sessions survive a restart
-    // and are the ones `session/list` reports.
+    // Same persistent store the CLI/TUI use — this host joins the runner
+    // namespace in `useRunnerSessionRoot` above — so ACP sessions survive a
+    // restart and are the ones `session/list` reports.
     store: defaultSessionStore,
     // Option B: always advertise image prompts (the plumbing maps them to
     // RunnerPromptInput.images), and reject up front with a clear error only when
