@@ -1,37 +1,11 @@
 // Focused tests for the ACP session bridge (QUA-248).
 //
-// The official SDK is not installed in this checkout yet (QUA-242 owns
-// package.json), so its `methods`/`RequestError` surface is mocked by shape.
 // The ACP App is a fake that records handlers; runners are fakes with a real
-// `bus` and a controllable `prompt`.
+// `bus` and a controllable `prompt`. The SDK dependency is real: no module
+// mock, so these tests cannot leak an SDK stand-in into sibling test files.
 
 import { expect, mock, test } from "bun:test"
 import { MemorySessionStore, createSession, type SessionStore } from "@quark/runner"
-
-mock.module("@agentclientprotocol/sdk", () => ({
-  methods: {
-    agent: {
-      session: { new: "session/new", prompt: "session/prompt", cancel: "session/cancel" },
-    },
-    client: { session: { update: "session/update" } },
-  },
-  RequestError: class RequestError extends Error {
-    code: number
-    data: unknown
-    constructor(code: number, message: string, data?: unknown) {
-      super(message)
-      this.code = code
-      this.data = data
-    }
-    static invalidParams(data?: unknown, additionalMessage?: string) {
-      return new RequestError(
-        -32602,
-        `Invalid params${additionalMessage ? `: ${additionalMessage}` : ""}`,
-        data,
-      )
-    }
-  },
-}))
 
 const { createSessionHandlers, registerSessions } = await import("../src/sessions")
 
@@ -311,6 +285,44 @@ test("cancel targets the runner session and reports a cancelled stop reason", as
   expect(cancelled).toEqual([sessionId])
   release()
   await expect(running).resolves.toEqual({ stopReason: "cancelled" })
+})
+
+test("title changes forward to the client for the session's lifetime", async () => {
+  const store = new MemorySessionStore()
+  const { runner, release } = makeRunner({ store, manual: true })
+  const bridge = createSessionHandlers({ store, createRunner: () => runner as any })
+  const { sessionId } = bridge.newSession(newSessionParams())
+  const notify = mock(() => Promise.resolve())
+  const ctx = { signal: new AbortController().signal, client: { notify } as any }
+
+  const turn = bridge.prompt({ sessionId, prompt: [{ type: "text", text: "fix the row" }] } as any, ctx)
+  // The runner sets a fallback title from the first message while the turn is
+  // live, then refines it once the turn settles: both are forwarded.
+  runner.bus.emit("session-title-changed", { sessionId, title: "Fix the sidebar row" })
+  release()
+  await turn
+  runner.bus.emit("session-title-changed", { sessionId, title: "Sidebar row fix" })
+  // A cleared title and a child session's title must not reach the client.
+  runner.bus.emit("session-title-changed", { sessionId, title: null })
+  runner.bus.emit("session-title-changed", { sessionId: "child-1", title: "Sub-agent title" })
+  await Promise.resolve()
+
+  expect(notify.mock.calls).toEqual([
+    [
+      "session/update",
+      {
+        sessionId,
+        update: { sessionUpdate: "session_info_update", title: "Fix the sidebar row" },
+      },
+    ],
+    [
+      "session/update",
+      {
+        sessionId,
+        update: { sessionUpdate: "session_info_update", title: "Sidebar row fix" },
+      },
+    ],
+  ])
 })
 
 test("onTurnStart receives the runner and ACP client context", async () => {

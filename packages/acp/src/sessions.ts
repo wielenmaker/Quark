@@ -49,7 +49,7 @@ import type {
   SessionConfigOption,
 } from "@agentclientprotocol/sdk"
 import { isAbsolute } from "node:path"
-import { createSession, type Runner, type SessionStore, type ToolDef } from "@quark/runner"
+import { createSession, type BusEvents, type Runner, type SessionStore, type ToolDef } from "@quark/runner"
 import { connectStdioServers, requireStdio, type McpConnection } from "./mcp"
 
 /** One ACP session's registry entry. */
@@ -69,6 +69,12 @@ interface SessionState {
   active: boolean
   /** Set when `cancel()` hit an active turn, so prompt() reports "cancelled". */
   cancelled: boolean
+  /**
+   * Latest client context (from a `session/prompt` call), for notifications
+   * that can land outside a turn: the generated title arrives asynchronously
+   * after the first message, possibly after that turn ended.
+   */
+  client: AgentContext | null
   /**
    * The active turn's abort controller, owned by `prompt()`. `cancel()`,
    * `close()` and `dispose()` abort it so provider streaming, tool execution,
@@ -299,6 +305,7 @@ export function createSessionHandlers(options: SessionBridgeOptions): SessionBri
       runnerSessionId: null,
       active: false,
       cancelled: false,
+      client: null,
       turnController: null,
       unsubscribe: null,
       mcp,
@@ -335,8 +342,36 @@ export function createSessionHandlers(options: SessionBridgeOptions): SessionBri
       state.runnerSessionId ??= sessionId
     }
     runner.bus.on("session-created", onCreated)
+    // Titles arrive during a fresh session's first prompt: a synchronous
+    // fallback from the user's text, then the generated title, which can land
+    // after the turn ended. Forward them for the session's lifetime (not the
+    // turn's) so clients show the title in their thread and session list
+    // without waiting for a session/list refresh.
+    const onTitleChanged = (data: BusEvents["session-title-changed"]) => {
+      if (data.title === null) return
+      // Child/sub-agent sessions share this runner's bus (see subagent
+      // forward-events); only the session this ACP attachment names may
+      // retitle the client's thread.
+      if (state.runnerSessionId !== null && data.sessionId !== state.runnerSessionId) return
+      const client = state.client
+      if (!client) return
+      client
+        .notify(methods.client.session.update, {
+          sessionId: state.acpSessionId,
+          update: { sessionUpdate: "session_info_update", title: data.title },
+        })
+        .catch((error: unknown) => {
+          log(
+            `session title update delivery failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        })
+    }
+    runner.bus.on("session-title-changed", onTitleChanged)
     state.runner = runner
-    state.unsubscribe = () => runner.bus.off("session-created", onCreated)
+    state.unsubscribe = () => {
+      runner.bus.off("session-created", onCreated)
+      runner.bus.off("session-title-changed", onTitleChanged)
+    }
     return runner
   }
 
@@ -394,6 +429,9 @@ export function createSessionHandlers(options: SessionBridgeOptions): SessionBri
       }
       state.active = true
       state.cancelled = false
+      // Keep the latest client context: the title forwarder may need to reach
+      // the client after this request (and its turn) has settled.
+      state.client = ctx.client
       // QUA-264: one controller per turn, shared by the permission/update
       // bridges, the runner, its tools, and MCP. `session/cancel` is a
       // notification, so it never touches `ctx.signal`; aborting this
@@ -531,6 +569,7 @@ export function createSessionHandlers(options: SessionBridgeOptions): SessionBri
         runnerSessionId,
         active: false,
         cancelled: false,
+        client: null,
         turnController: null,
         unsubscribe: null,
         mcp,
