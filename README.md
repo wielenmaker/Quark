@@ -106,7 +106,8 @@ The command lands at `~/.local/bin/quark` and runs a versioned copy under `~/.lo
 | `quark -a <agent>` | Pick an agent (default: `default_agent` in config) |
 | `quark --model <provider/model>` | Override model for this run |
 | `quark -s <session-id>` | Resume a session |
-| `quark --no-store` | Ephemeral run — never written to disk |
+| `quark --no-store` | Ephemeral one-off run — not resumable after exit |
+| `quark --sub-agent -a <profile>` | Memory-only worker; receives JSON prompts on stdin |
 | `quark -l` | List available agents |
 | `quark --verbose` | Print every tool call and result to stderr |
 | `quark auth login\|status\|logout <provider>` | Manage credentials |
@@ -165,6 +166,28 @@ prompt: |
 - **Subagents:** a subagent is an agent exposed as a tool. It runs in an isolated child session, so its reasoning never pollutes the parent transcript.
 - **MCP:** when driven over ACP, stdio MCP servers handed over by the client are connected per session, and their tools are namespaced `mcp__<server>__<tool>`.
 
+### Live subagent conversations
+
+```ts
+subagent({ profile: "coder", prompt: "Implement the feature." })
+// Answer ends with: Keep talking to coder with sa-<id>
+subagent({ resume: "sa-<id>", prompt: "Now add tests." })
+```
+
+Each child stays alive after answering. History and write/edit checkpoints live
+only in RAM; no child state or registry is saved in the main session metadata.
+The main transcript still saves the normal tool call and returned answer.
+Resume uses the same live child, profile, model, and workspace. Unknown/expired
+IDs fail, simultaneous requests to one child fail as busy, and different children
+can run concurrently. Parent exit or cancellation closes children; IDs cannot be
+resumed by launching a fresh `quark --session` process.
+
+The worker accepts one NDJSON `{ "prompt": "..." }` request per turn on stdin.
+It streams answers on stdout and structured activity/results on stderr.
+Closing stdin ends the worker. File checkpoints cover write/edit targets (not
+arbitrary shell mutations), stay within a 64 MiB memory budget, and disappear on
+exit. Workspace edits themselves still write to disk.
+
 ## Sessions
 
 ```diagram
@@ -174,7 +197,7 @@ prompt: |
 ```
 
 - Resume with `quark -s <session-id>` — any interface (CLI, TUI, ACP) can pick up the same session.
-- Subagent sessions link back to their parent (`parentSessionId`).
+- Live subagent sessions have `sa-...` IDs and an in-memory parent link; they are not listed as saved sessions.
 - `--no-store` skips disk entirely.
 
 ---

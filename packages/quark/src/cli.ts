@@ -13,6 +13,7 @@ import { bus, type TypedBus } from "@quark/runner/session/events"
 import { startEventWriter } from "@quark/runner/session/event-writer"
 import { setVerbose, debug } from "@quark/runner/debug"
 import { formatArgs } from "@quark/runner/debug/format-tool-args"
+import { closeSubagents } from "@quark/runner/subagent/supervisor"
 import { createQuarkRuntime } from "./runtime"
 import { useRunnerSessionRoot } from "./session-root"
 import { tuiLaunchArgs } from "./tui-launch"
@@ -43,6 +44,7 @@ Options:
   -s, --session <id>            Resume an existing session
       --model <id>              Model to use for this run (e.g. copilot/claude-sonnet-4.5)
       --no-store                Run an ephemeral session — never written to disk
+      --sub-agent               Memory-only worker; accepts JSON prompts on stdin
       --verbose                 Print every tool call + result to stderr.
                                 For engine internals use QUARK_DEBUG=* (see README).
   -l, --list-agents             List available agents
@@ -63,6 +65,7 @@ interface ParsedArgs {
   sessionId?: string
   model?: string
   noStore?: boolean
+  subAgent?: boolean
   verbose?: boolean
   listAgents?: boolean
   help?: boolean
@@ -77,6 +80,7 @@ function parseArguments(): ParsedArgs {
         session: { type: "string", short: "s" },
         model: { type: "string" },
         "no-store": { type: "boolean" },
+        "sub-agent": { type: "boolean" },
         verbose: { type: "boolean" },
         "list-agents": { type: "boolean", short: "l" },
         help: { type: "boolean", short: "h" },
@@ -100,6 +104,7 @@ function parseArguments(): ParsedArgs {
       sessionId: values.session,
       model: values.model,
       noStore: values["no-store"],
+      subAgent: values["sub-agent"],
       verbose: values.verbose,
       listAgents: values["list-agents"],
       help: values.help,
@@ -170,6 +175,26 @@ async function main() {
     process.exit(0)
   }
 
+  if (args.subAgent) {
+    if (args.sessionId) {
+      console.error("Error: --sub-agent resumes through its live stdin connection, not --session")
+      process.exitCode = 1
+      return
+    }
+    try {
+      if (args.agent && !listAgents().includes(args.agent)) throw new Error(`Unknown subagent profile: ${args.agent}`)
+      const agentDef = resolveAgent(args.agent)
+      const agent = await materializeAgent(agentDef)
+      const { runSubagentWorker } = await import("./subagent-worker")
+      await runSubagentWorker({ agent, profile: agentDef.id, model: args.model ?? agentDef.model, message: args.message })
+    } catch (error) {
+      const { SUBAGENT_EVENT_PREFIX } = await import("@quark/runner/subagent/protocol")
+      console.error(SUBAGENT_EVENT_PREFIX + JSON.stringify({ e: "error", kind: "process", message: error instanceof Error ? error.message : String(error) }))
+      process.exitCode = 1
+    }
+    return
+  }
+
   // No message provided → launch interactive TUI
   if (!args.message) {
     const { execFileSync } = await import("child_process")
@@ -231,12 +256,14 @@ async function main() {
       })
       dlog(`session: ${result.sessionId}`)
       cleanupEventWriter()
+      closeSubagents()
       // QUA-267: return with an exit code so pending teardown can settle.
       process.exitCode = 0
       return
     } catch (err: any) {
       console.error("Error:", err.message)
       cleanupEventWriter()
+      closeSubagents()
       process.exitCode = 1
       return
     }
@@ -258,11 +285,15 @@ async function main() {
     if (!args.noStore) {
       process.stdout.write(`Resume the session with quark --session ${result.sessionId}\n`)
     }
+    // One-shot runs end here: live subagents must die with the process, so a
+    // finished child never keeps the event loop (and the CLI) alive.
+    closeSubagents()
     // QUA-267: return with an exit code so pending teardown can settle.
     process.exitCode = 0
     return
   } catch (err: any) {
     console.error("Error:", err.message)
+    closeSubagents()
     process.exitCode = 1
     return
   }

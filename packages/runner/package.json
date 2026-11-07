@@ -224,6 +224,12 @@
       "import": "./dist/storage/session-jsonl.js",
       "default": "./dist/storage/session-jsonl.js"
     },
+    "./subagent/supervisor": {
+      "types": "./dist/subagent/supervisor.d.ts",
+      "bun": "./src/subagent/supervisor.ts",
+      "import": "./dist/subagent/supervisor.js",
+      "default": "./dist/subagent/supervisor.js"
+    },
     "./subagent/protocol": {
       "types": "./dist/subagent/protocol.d.ts",
       "bun": "./src/subagent/protocol.ts",

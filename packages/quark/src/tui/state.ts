@@ -883,6 +883,7 @@ export function dispatch(state: AppState, action: TuiAction): void {
       setStore(
         "messages", msgIdx, "parts", partIdx, "subAgent" as any,
         produce((sa: SubAgentState) => {
+          sa.profile = action.profile
           if (action.tokens?.input) sa.tokensUsed = action.tokens.input
           if (action.tokenLimit && action.tokenLimit > 0) sa.tokenLimit = action.tokenLimit
           if (action.modelName) sa.modelName = action.modelName

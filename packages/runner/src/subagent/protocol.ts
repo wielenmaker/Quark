@@ -12,6 +12,7 @@ export type ChildEvent =
   | { e: "text-delta"; d: string }
   | { e: "error"; kind: SubagentErrorKind; message: string }
   | { e: "loop-end" }
+  | { e: "result"; sessionId: string; profile: string; output: string }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -53,6 +54,9 @@ export function parseChildEventLine(line: string): ChildEvent | null {
       return value as ChildEvent
     case "error":
       if (!isString(value.message) || !["provider", "process", "protocol"].includes(String(value.kind))) break
+      return value as ChildEvent
+    case "result":
+      if (!isString(value.sessionId) || !isString(value.profile) || typeof value.output !== "string") break
       return value as ChildEvent
     case "loop-end":
       return value as ChildEvent
